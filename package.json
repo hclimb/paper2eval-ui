@@ -29,6 +29,7 @@
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
     "lucide-react": "^1.11.0",
+    "nitro": "^3.0.1-20260424-182106-f8cf6ccc",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "rehype-slug": "^6.0.0",
