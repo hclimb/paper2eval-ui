@@ -1,0 +1,1112 @@
+@import "tailwindcss";
+
+@import "@fontsource/iosevka/400.css";
+
+/* Tailwind v4 design tokens — surfaces `bg-paper`, `text-ink`, `border-rule`,
+   `font-display` utilities without a config file. The matching short-name
+   aliases below (`--paper`, `--ink`, …) exist because ~60 inline style
+   blocks reach for `var(--paper)` directly; don't break them to save a few
+   keystrokes. */
+@theme {
+  --color-paper: #ede5d3;
+  --color-paper-deep: #d9cfba;
+  --color-ink: #141410;
+  --color-ink-soft: #6b645a;
+  --color-accent: #a53030;
+  --color-accent-soft: #d4636f;
+  --color-rule: #b8ac9a;
+  --color-highlight: #f6e8b8;
+
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "Iosevka", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root {
+  --paper: var(--color-paper);
+  --paper-deep: var(--color-paper-deep);
+  --ink: var(--color-ink);
+  --ink-soft: var(--color-ink-soft);
+  --accent: var(--color-accent);
+  --accent-soft: var(--color-accent-soft);
+  --rule: var(--color-rule);
+  --highlight: var(--color-highlight);
+
+  /* Font-size scale. Consumers: inline `style={{fontSize: '0.85rem'}}` should
+     migrate to var(--fs-base). Keep additions semantic, not numeric. */
+  --fs-xs: 0.7rem;
+  --fs-sm: 0.8rem;
+  --fs-base: 0.85rem;
+  --fs-md: 0.95rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.15rem;
+
+  /* Spacing scale (4/8px rhythm). */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  --measure: 38rem;
+}
+
+html {
+  scrollbar-gutter: stable;
+  /* Sticky header is ~3.5rem tall — hash-anchor jumps land headings clear of it. */
+  scroll-padding-top: 4rem;
+}
+
+/* `rehype-slug` gives every in-prose heading an id; matching selector lets
+   anchor links land the target below the sticky header instead of beneath it. */
+:where(h1, h2, h3, h4, h5, h6)[id] {
+  scroll-margin-top: 4rem;
+}
+
+::selection {
+  background: var(--highlight);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin-top: 0;
+}
+
+h1 {
+  font-weight: 700;
+  font-size: 2.25rem;
+  line-height: 1.15;
+}
+h2 {
+  font-weight: 600;
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+h3 {
+  font-weight: 600;
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+h4 {
+  font-weight: 600;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--accent-soft);
+  transition:
+    text-decoration-thickness 120ms ease,
+    text-decoration-color 120ms ease,
+    color 120ms ease;
+}
+a:hover {
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--accent);
+}
+/* A corpus of cross-referenced theses only works if the reader remembers what
+   they've already read. Desaturated oxblood + muted underline signals "seen". */
+a:visited {
+  color: color-mix(in oklab, var(--accent) 65%, var(--ink-soft));
+  text-decoration-color: color-mix(in oklab, var(--accent-soft) 50%, var(--ink-soft));
+}
+a:visited:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: "tnum", "zero", "calt";
+}
+.font-body {
+  font-family: var(--font-body);
+}
+.font-display {
+  font-family: var(--font-display);
+}
+.measure {
+  max-width: var(--measure);
+}
+.muted {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.muted:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.active {
+  color: var(--ink);
+  text-decoration: none;
+}
+.active:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+.rule {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: var(--space-6) 0;
+}
+.page-wrap {
+  width: min(72rem, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+/* Visually hide while remaining in the a11y tree — used for the per-page
+   `<h1>` on thesis permalinks where the visual header is the body proposition
+   itself, not a separate headline. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The "small mono caps" recipe for all /SECTION headers and metadata labels.
+   Previously duplicated ~10x inline. Migration in progress. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+/* Footer social row — `<a class="footer-icon">` wraps the icon SVG. */
+.footer-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding: var(--space-1);
+  border-radius: 2px;
+  transition: color 120ms ease;
+}
+.footer-icon:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Icon + trailing label on the same line — e.g. the `<DownloadIcon/> DOWNLOAD PDF →` link. */
+.icon-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+}
+.icon-text:hover {
+  text-decoration: underline;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  /* Match `.font-mono`: tabular numerals + slashed zero must not flip
+     when you wrap a number in <code> next to a metadata row. */
+  font-feature-settings: "tnum", "zero", "calt";
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+code {
+  background: var(--paper-deep);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+pre {
+  background: var(--paper-deep);
+  padding: var(--space-4);
+  border-radius: 4px;
+  overflow-x: auto;
+  border-left: 3px solid var(--accent);
+}
+pre code {
+  background: transparent;
+  padding: 0;
+  /* Reset to avoid compounding 0.95em × 0.95em ≈ 0.9025em on nested code. */
+  font-size: 1em;
+}
+
+/* Raw-exposure mono panels — demoted from 3px oxblood to hairline rule so the
+   oxblood accent stays reserved for code blocks + section headers. */
+.raw-panel {
+  background: var(--paper-deep);
+  border: 1px solid var(--rule);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--ink);
+  overflow-x: auto;
+}
+
+kbd {
+  background: var(--paper-deep);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+  font-size: 0.85em;
+  color: var(--ink);
+}
+
+.xref-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.xref-list li {
+  padding: 0.15rem 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+}
+
+.meta-subhead {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin: 0 0 var(--space-3) 0;
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+}
+
+.sparkline {
+  display: inline-block;
+  height: 1em;
+  vertical-align: middle;
+}
+.sparkline .bar {
+  display: inline-block;
+  width: 2px;
+  background: var(--ink-soft);
+  margin-right: 1px;
+  vertical-align: bottom;
+}
+
+
+/* Header "more" dropdown — primary nav stays ≤4 items wide so it fits on
+   mobile without flex-wrap stepping the links below the § pin. Absolute
+   positioning keeps the dropdown out of the document flow so the nav row's
+   height doesn't jump when it opens. */
+.nav-more {
+  position: relative;
+  display: inline-block;
+}
+.nav-more > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.nav-more > summary::-webkit-details-marker {
+  display: none;
+}
+.nav-more > summary::after {
+  content: " ▾";
+  font-size: 0.7em;
+  opacity: 0.6;
+}
+.nav-more[open] > summary::after {
+  content: " ▴";
+}
+.nav-more-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 8rem;
+  z-index: 50;
+  box-shadow: 0 4px 16px rgba(20, 20, 16, 0.15);
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+}
+
+/* Overlays (command palette, help, goto). */
+.overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 16, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8vh;
+}
+.overlay {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: var(--space-4);
+  width: min(640px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  box-shadow: 0 10px 40px rgba(20, 20, 16, 0.3);
+}
+
+.prose {
+  max-width: var(--measure);
+  line-height: 1.7;
+}
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.prose p {
+  margin-bottom: 1em;
+}
+.prose ul, .prose ol {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+.prose li {
+  margin-bottom: 0.25em;
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2em 0;
+}
+.prose strong {
+  font-weight: 700;
+}
+
+.task-card {
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--accent);
+  border-radius: 2px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.task-card:hover {
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+  border-bottom-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(20, 20, 16, 0.08);
+}
+.task-card .card-chevron {
+  color: var(--rule);
+  transition: color 120ms ease, transform 120ms ease;
+  flex-shrink: 0;
+}
+.task-card:hover .card-chevron {
+  color: var(--accent);
+  transform: translateX(2px);
+}
+
+/* File explorer — IDE chrome ------------------------------------------------ */
+.explorer-chrome {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 640px;
+}
+
+.explorer-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px var(--space-3);
+  background: var(--paper-deep);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+  font-weight: 600;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.explorer-body {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.explorer-tree-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--rule);
+  box-shadow: 1px 0 3px rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 1;
+}
+
+.explorer-pane-header {
+  display: flex;
+  align-items: center;
+  padding: 4px var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+  font-weight: 600;
+  border-bottom: 1px solid color-mix(in oklab, var(--rule) 50%, transparent);
+  flex-shrink: 0;
+  user-select: none;
+  text-transform: uppercase;
+}
+
+.explorer-editor-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1e1e1e;
+  min-width: 0;
+}
+
+/* Editor tab bar */
+.explorer-tab-bar {
+  display: flex;
+  align-items: stretch;
+  background: #252526;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.explorer-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: #969696;
+  background: #2d2d2d;
+  border-right: 1px solid #333;
+  border-top: 2px solid transparent;
+  cursor: default;
+  user-select: none;
+  min-height: 32px;
+  max-width: 200px;
+}
+
+.explorer-tab[data-active='true'] {
+  background: #1e1e1e;
+  color: #ccc;
+  border-top-color: var(--accent);
+}
+
+.explorer-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-tab-path {
+  font-size: 10px;
+  opacity: 0.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.explorer-tab:hover .explorer-tab-close {
+  color: #999;
+}
+
+/* Empty + loading states */
+.explorer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--space-3);
+  color: #555;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+
+.explorer-empty svg {
+  opacity: 0.35;
+}
+
+.explorer-empty-title {
+  font-size: var(--fs-sm);
+  color: #666;
+}
+
+.explorer-empty-hint {
+  font-size: var(--fs-xs);
+  color: #4a4a4a;
+}
+
+/* Skeleton loading pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.35; }
+}
+
+.explorer-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--space-4);
+  flex: 1;
+  min-height: 0;
+}
+
+.skeleton-line {
+  height: 12px;
+  background: #444;
+  border-radius: 3px;
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+.skeleton-line:nth-child(1) { width: 70%; animation-delay: 0s; }
+.skeleton-line:nth-child(2) { width: 90%; animation-delay: 0.15s; }
+.skeleton-line:nth-child(3) { width: 55%; animation-delay: 0.3s; }
+.skeleton-line:nth-child(4) { width: 80%; animation-delay: 0.45s; }
+.skeleton-line:nth-child(5) { width: 65%; animation-delay: 0.6s; }
+.skeleton-line:nth-child(6) { width: 45%; animation-delay: 0.75s; }
+.skeleton-line:nth-child(7) { width: 75%; animation-delay: 0.9s; }
+
+.explorer-editor {
+  background: #1e1e1e;
+}
+.explorer-editor .cb-root {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #d4d4d4;
+}
+.explorer-editor .cb-root pre,
+.explorer-editor .cb-root pre code {
+  font-family: "Iosevka", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: transparent !important;
+  border: none;
+  border-left: none;
+  padding: 0;
+  color: inherit;
+}
+.explorer-editor .cb-root pre {
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Instruction collapse — chevron + smooth open/close ----------------------- */
+/* Uses interpolate-size for animating details open/close (Chromium 129+,
+   Safari 18.2+, Firefox 133+). Gracefully degrades to instant toggle. */
+.instruction-collapse {
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: var(--space-3) var(--space-4);
+  interpolate-size: allow-keywords;
+}
+.instruction-collapse[open] {
+  padding-bottom: var(--space-5);
+}
+.instruction-collapse summary {
+  margin-bottom: 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+}
+.instruction-collapse summary::-webkit-details-marker {
+  display: none;
+}
+.instruction-collapse .instruction-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--ink-soft);
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+}
+.instruction-collapse[open] .instruction-chevron {
+  transform: rotate(90deg);
+}
+.instruction-collapse .instruction-badge {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--ink-soft);
+  background: var(--paper-deep);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 400;
+}
+.instruction-collapse::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition: block-size 250ms ease, content-visibility 250ms ease allow-discrete;
+}
+.instruction-collapse[open]::details-content {
+  block-size: auto;
+}
+.instruction-collapse[open] summary {
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.creation-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--rule);
+  margin-bottom: 0;
+}
+.creation-tab {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  transition: color 100ms, border-color 100ms, background 100ms;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.creation-tab:hover {
+  color: var(--ink);
+  background: color-mix(in oklab, var(--paper-deep) 40%, transparent);
+}
+.creation-tab[data-active='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+  background: color-mix(in oklab, var(--paper-deep) 25%, transparent);
+}
+.tab-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+.creation-tab[data-active='true'] .tab-icon {
+  opacity: 0.8;
+}
+
+/* ── Pipeline timeline ─────────────────────────────────────────────── */
+
+.pipeline-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-left: 2.25rem;
+}
+.pipeline-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.6875rem;
+  /* Align line endpoints with circle centers inside first/last card */
+  top: 1.6rem;
+  bottom: 1.6rem;
+  width: 2px;
+  background: var(--rule);
+}
+
+.phase-num {
+  position: absolute;
+  left: calc(-2.25rem);
+  top: 0.4rem;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--ink-soft);
+  z-index: 1;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.phase-card[open] .phase-num {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.status-dot--ok   { background: #4a7c59; }
+.status-dot--warn { background: #c48820; }
+.status-dot--skip { background: var(--rule); }
+
+.phase-summary-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.phase-body {
+  border-left: 2px solid color-mix(in oklab, var(--rule) 50%, transparent);
+  margin-left: 0.1rem;
+  padding-left: var(--space-4);
+  padding-bottom: var(--space-3);
+}
+
+.problem-quote {
+  border-left: 3px solid var(--accent);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in oklab, var(--paper-deep) 60%, transparent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  line-height: 1.6;
+  max-width: 65ch;
+  margin-bottom: var(--space-3);
+}
+
+.diagnosis-step {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0 var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--rule) 25%, transparent);
+}
+.diagnosis-step:last-child {
+  border-bottom: none;
+}
+.diagnosis-num {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--paper-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  flex-shrink: 0;
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.inventory-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+.inventory-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid color-mix(in oklab, var(--rule) 30%, transparent);
+  vertical-align: top;
+}
+.inventory-table tr:last-child td {
+  border-bottom: none;
+}
+.inventory-group {
+  margin-bottom: var(--space-3);
+}
+.inventory-group-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.phase-card {
+  position: relative;
+  border: 1px solid color-mix(in oklab, var(--rule) 60%, transparent);
+  border-radius: 4px;
+  padding: 0 var(--space-3);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.phase-card[open] {
+  border-color: var(--rule);
+  background: color-mix(in oklab, var(--paper-deep) 30%, transparent);
+  box-shadow: 0 2px 8px rgba(20, 20, 16, 0.06);
+}
+.phase-card summary {
+  list-style: none;
+}
+.phase-card summary::-webkit-details-marker {
+  display: none;
+}
+.phase-card summary::before {
+  content: '▸';
+  color: var(--ink-soft);
+  font-size: 0.7em;
+  margin-right: var(--space-1);
+}
+.phase-card[open] > summary::before {
+  content: '▾';
+}
+
+/* ------------------------------------------------------------------ */
+/* App shell: header, footer, 404.                                     */
+/*                                                                    */
+/* Header sits sticky with a semi-transparent paper background so a    */
+/* `backdrop-filter: blur()` picks up scrolling content beneath. The   */
+/* 1px rule + soft drop-shadow fakes a subtle "lift".                  */
+/* ------------------------------------------------------------------ */
+.app-header {
+  background: color-mix(in oklab, var(--paper) 82%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--rule);
+  box-shadow: 0 8px 20px -16px rgba(20, 20, 16, 0.25);
+}
+.app-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-3);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xl);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.brand:hover,
+.brand:visited,
+.brand:visited:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+.brand-mark {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+}
+.nav-link {
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding-block: var(--space-2);
+  border-bottom: 2px solid transparent;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.nav-link:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+.nav-link:visited {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.nav-link:visited:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+.nav-link.active,
+.nav-link.active:visited {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  text-decoration: none;
+}
+
+.app-footer {
+  border-top: 1px solid var(--rule);
+  margin-top: var(--space-7);
+  padding-block: var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  color: var(--ink-soft);
+}
+.app-footer-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+.app-footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.app-footer-title {
+  color: var(--ink);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.app-footer-desc {
+  max-width: 32rem;
+}
+.app-footer-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.app-footer a,
+.app-footer a:visited {
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.app-footer a:hover,
+.app-footer a:visited:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-soft);
+  text-underline-offset: 2px;
+}
+.app-footer-sep {
+  color: var(--rule);
+  user-select: none;
+}
+
+.not-found {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
+  min-height: 60vh;
+  justify-content: center;
+}
+.not-found-mark {
+  color: var(--rule);
+  margin-bottom: var(--space-5);
+}
+.not-found-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-3);
+}
+.not-found-title {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 var(--space-4) 0;
+  letter-spacing: -0.02em;
+}
+.not-found-desc {
+  max-width: 32rem;
+  color: var(--ink-soft);
+  margin: 0 0 var(--space-5) 0;
+  line-height: 1.6;
+}
+.not-found-actions {
+  display: flex;
+  gap: var(--space-4);
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+}
