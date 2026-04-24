@@ -43,6 +43,9 @@ export default function Header() {
           <Link to="/runs/beat-math500" className="nav-link" activeProps={{ className: 'active' }}>
             runs
           </Link>
+          <Link to="/docs" className="nav-link" activeProps={{ className: 'active' }}>
+            docs
+          </Link>
         </nav>
       </div>
     </header>

@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TasksSlugRouteImport } from './routes/tasks/$slug'
 import { Route as RunsBeatMath500RouteImport } from './routes/runs/beat-math500'
 import { Route as TasksSlugIndexRouteImport } from './routes/tasks/$slug/index'
 import { Route as TasksSlugFilesSplatRouteImport } from './routes/tasks/$slug/files/$'
 
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,6 +49,7 @@ const TasksSlugFilesSplatRoute = TasksSlugFilesSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/docs': typeof DocsRoute
   '/runs/beat-math500': typeof RunsBeatMath500Route
   '/tasks/$slug': typeof TasksSlugRouteWithChildren
   '/tasks/$slug/': typeof TasksSlugIndexRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/docs': typeof DocsRoute
   '/runs/beat-math500': typeof RunsBeatMath500Route
   '/tasks/$slug': typeof TasksSlugIndexRoute
   '/tasks/$slug/files/$': typeof TasksSlugFilesSplatRoute
@@ -57,6 +65,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/docs': typeof DocsRoute
   '/runs/beat-math500': typeof RunsBeatMath500Route
   '/tasks/$slug': typeof TasksSlugRouteWithChildren
   '/tasks/$slug/': typeof TasksSlugIndexRoute
@@ -66,15 +75,22 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/docs'
     | '/runs/beat-math500'
     | '/tasks/$slug'
     | '/tasks/$slug/'
     | '/tasks/$slug/files/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/runs/beat-math500' | '/tasks/$slug' | '/tasks/$slug/files/$'
+  to:
+    | '/'
+    | '/docs'
+    | '/runs/beat-math500'
+    | '/tasks/$slug'
+    | '/tasks/$slug/files/$'
   id:
     | '__root__'
     | '/'
+    | '/docs'
     | '/runs/beat-math500'
     | '/tasks/$slug'
     | '/tasks/$slug/'
@@ -83,12 +99,20 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DocsRoute: typeof DocsRoute
   RunsBeatMath500Route: typeof RunsBeatMath500Route
   TasksSlugRoute: typeof TasksSlugRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -143,6 +167,7 @@ const TasksSlugRouteWithChildren = TasksSlugRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DocsRoute: DocsRoute,
   RunsBeatMath500Route: RunsBeatMath500Route,
   TasksSlugRoute: TasksSlugRouteWithChildren,
 }
