@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useCallback, useState } from 'react'
 import { InstructionCollapse, KV, MetricProgress, Panel, RewardRow } from '#/components/DetailParts'
 import { FileExplorer } from '#/components/FileExplorer'
 import { CreationLog, type Provenance } from '#/components/PipelineView'
 import RouteErrorPanel from '#/components/RouteErrorPanel'
 import SectionHead from '#/components/SectionHead'
 import { SITE } from '#/lib/constants'
-import { fetchTaskDetail } from '#/lib/server-fns'
+import { fetchAllTaskFiles, fetchTaskDetail } from '#/lib/server-fns'
 import { type Claims, formatBytes, formatDuration, type TaskToml } from '#/lib/tasks'
 
 type LoaderData = {
@@ -200,9 +201,20 @@ function TaskDetail() {
       )}
 
       <section style={{ marginBottom: 'var(--space-6)' }}>
-        <h2 className="meta-subhead">
-          FILES — {fileCount} files · {formatBytes(totalSize)}
-        </h2>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 'var(--space-3)',
+            marginBottom: 'var(--space-3)',
+          }}
+        >
+          <h2 className="meta-subhead" style={{ margin: 0 }}>
+            FILES — {fileCount} files · {formatBytes(totalSize)}
+          </h2>
+          <DownloadButton slug={slug} />
+        </div>
         <FileExplorer paths={filePaths} slug={slug} />
       </section>
 
@@ -210,5 +222,65 @@ function TaskDetail() {
 
       <InstructionCollapse instructionHtml={instructionHtml} />
     </main>
+  )
+}
+
+function DownloadButton({ slug }: { slug: string }) {
+  const [state, setState] = useState<'idle' | 'fetching' | 'zipping'>('idle')
+
+  const handleDownload = useCallback(async () => {
+    setState('fetching')
+    try {
+      const { files } = await fetchAllTaskFiles({ data: { slug } })
+      setState('zipping')
+      const { zipSync, strToU8 } = await import('fflate')
+      const zipData: Record<string, Uint8Array> = {}
+      for (const f of files) {
+        zipData[f.path] = strToU8(f.content)
+      }
+      const zipped = zipSync(zipData)
+      const blob = new Blob([zipped.buffer as ArrayBuffer], { type: 'application/zip' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${slug}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('[download]', err)
+    } finally {
+      setState('idle')
+    }
+  }, [slug])
+
+  return (
+    <button
+      type="button"
+      className="download-btn font-mono"
+      onClick={handleDownload}
+      disabled={state !== 'idle'}
+    >
+      {state === 'idle' && (
+        <>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          download .zip
+        </>
+      )}
+      {state === 'fetching' && 'fetching files…'}
+      {state === 'zipping' && 'zipping…'}
+    </button>
   )
 }

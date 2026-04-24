@@ -189,3 +189,16 @@ export const fetchTaskFile = createServerFn({ method: 'GET' })
 
     return { slug, path, content, renderedHtml, size }
   })
+
+export const fetchAllTaskFiles = createServerFn({ method: 'GET' })
+  .inputValidator((d: { slug: string }) => d)
+  .handler(async ({ data }) => {
+    const files = await listTaskFiles(data.slug)
+    const contents = await Promise.all(
+      files.map(async (f) => ({
+        path: f.key,
+        content: await getTaskFile(data.slug, f.key),
+      })),
+    )
+    return { slug: data.slug, files: contents }
+  })

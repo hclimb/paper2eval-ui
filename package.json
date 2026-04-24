@@ -28,6 +28,7 @@
     "@tanstack/react-router-devtools": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
+    "fflate": "^0.8.2",
     "lucide-react": "^1.11.0",
     "nitro": "^3.0.1-20260424-182106-f8cf6ccc",
     "react": "^19.2.0",
