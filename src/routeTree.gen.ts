@@ -13,6 +13,8 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TasksSlugRouteImport } from './routes/tasks/$slug'
 import { Route as TasksSlugIndexRouteImport } from './routes/tasks/$slug/index'
+import { Route as TasksSlugPaperRouteImport } from './routes/tasks/$slug/paper'
+import { Route as TasksSlugRunsRunIdRouteImport } from './routes/tasks/$slug/runs/$runId'
 import { Route as TasksSlugFilesSplatRouteImport } from './routes/tasks/$slug/files/$'
 
 const DocsRoute = DocsRouteImport.update({
@@ -35,6 +37,16 @@ const TasksSlugIndexRoute = TasksSlugIndexRouteImport.update({
   path: '/',
   getParentRoute: () => TasksSlugRoute,
 } as any)
+const TasksSlugPaperRoute = TasksSlugPaperRouteImport.update({
+  id: '/paper',
+  path: '/paper',
+  getParentRoute: () => TasksSlugRoute,
+} as any)
+const TasksSlugRunsRunIdRoute = TasksSlugRunsRunIdRouteImport.update({
+  id: '/runs/$runId',
+  path: '/runs/$runId',
+  getParentRoute: () => TasksSlugRoute,
+} as any)
 const TasksSlugFilesSplatRoute = TasksSlugFilesSplatRouteImport.update({
   id: '/files/$',
   path: '/files/$',
@@ -45,22 +57,28 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
   '/tasks/$slug': typeof TasksSlugRouteWithChildren
+  '/tasks/$slug/paper': typeof TasksSlugPaperRoute
   '/tasks/$slug/': typeof TasksSlugIndexRoute
   '/tasks/$slug/files/$': typeof TasksSlugFilesSplatRoute
+  '/tasks/$slug/runs/$runId': typeof TasksSlugRunsRunIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
+  '/tasks/$slug/paper': typeof TasksSlugPaperRoute
   '/tasks/$slug': typeof TasksSlugIndexRoute
   '/tasks/$slug/files/$': typeof TasksSlugFilesSplatRoute
+  '/tasks/$slug/runs/$runId': typeof TasksSlugRunsRunIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
   '/tasks/$slug': typeof TasksSlugRouteWithChildren
+  '/tasks/$slug/paper': typeof TasksSlugPaperRoute
   '/tasks/$slug/': typeof TasksSlugIndexRoute
   '/tasks/$slug/files/$': typeof TasksSlugFilesSplatRoute
+  '/tasks/$slug/runs/$runId': typeof TasksSlugRunsRunIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -68,17 +86,27 @@ export interface FileRouteTypes {
     | '/'
     | '/docs'
     | '/tasks/$slug'
+    | '/tasks/$slug/paper'
     | '/tasks/$slug/'
     | '/tasks/$slug/files/$'
+    | '/tasks/$slug/runs/$runId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/docs' | '/tasks/$slug' | '/tasks/$slug/files/$'
+  to:
+    | '/'
+    | '/docs'
+    | '/tasks/$slug/paper'
+    | '/tasks/$slug'
+    | '/tasks/$slug/files/$'
+    | '/tasks/$slug/runs/$runId'
   id:
     | '__root__'
     | '/'
     | '/docs'
     | '/tasks/$slug'
+    | '/tasks/$slug/paper'
     | '/tasks/$slug/'
     | '/tasks/$slug/files/$'
+    | '/tasks/$slug/runs/$runId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,6 +145,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksSlugIndexRouteImport
       parentRoute: typeof TasksSlugRoute
     }
+    '/tasks/$slug/paper': {
+      id: '/tasks/$slug/paper'
+      path: '/paper'
+      fullPath: '/tasks/$slug/paper'
+      preLoaderRoute: typeof TasksSlugPaperRouteImport
+      parentRoute: typeof TasksSlugRoute
+    }
+    '/tasks/$slug/runs/$runId': {
+      id: '/tasks/$slug/runs/$runId'
+      path: '/runs/$runId'
+      fullPath: '/tasks/$slug/runs/$runId'
+      preLoaderRoute: typeof TasksSlugRunsRunIdRouteImport
+      parentRoute: typeof TasksSlugRoute
+    }
     '/tasks/$slug/files/$': {
       id: '/tasks/$slug/files/$'
       path: '/files/$'
@@ -128,13 +170,17 @@ declare module '@tanstack/react-router' {
 }
 
 interface TasksSlugRouteChildren {
+  TasksSlugPaperRoute: typeof TasksSlugPaperRoute
   TasksSlugIndexRoute: typeof TasksSlugIndexRoute
   TasksSlugFilesSplatRoute: typeof TasksSlugFilesSplatRoute
+  TasksSlugRunsRunIdRoute: typeof TasksSlugRunsRunIdRoute
 }
 
 const TasksSlugRouteChildren: TasksSlugRouteChildren = {
+  TasksSlugPaperRoute: TasksSlugPaperRoute,
   TasksSlugIndexRoute: TasksSlugIndexRoute,
   TasksSlugFilesSplatRoute: TasksSlugFilesSplatRoute,
+  TasksSlugRunsRunIdRoute: TasksSlugRunsRunIdRoute,
 }
 
 const TasksSlugRouteWithChildren = TasksSlugRoute._addFileChildren(
