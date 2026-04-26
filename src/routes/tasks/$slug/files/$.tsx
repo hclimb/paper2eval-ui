@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import RouteErrorPanel from '#/components/RouteErrorPanel'
 import { SITE } from '#/lib/constants'
-import { fetchTaskFile } from '#/lib/server-fns'
+import { fetchTaskFile } from '#/lib/tasks.api'
 import { formatBytes } from '#/lib/formatters'
 
 type LoaderData = {

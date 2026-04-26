@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CodeBlock } from '#/components/CodeBlock'
-import { fetchTaskFile } from '#/lib/server-fns'
+import { fetchTaskFile } from '#/lib/tasks.api'
 
 export type PipelinePhase = {
   name: string

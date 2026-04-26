@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CodeBlock } from '#/components/CodeBlock'
-import { fetchTaskFile } from '#/lib/server-fns'
+import { fetchTaskFile } from '#/lib/tasks.api'
 import { TREE_THEME_COLORS } from '#/lib/tree-theme'
 
 export function FileExplorer({ paths, slug }: { paths: string[]; slug: string }) {
