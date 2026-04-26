@@ -2,11 +2,9 @@
 
 @import "@fontsource/iosevka/400.css";
 
-/* Tailwind v4 design tokens — surfaces `bg-paper`, `text-ink`, `border-rule`,
-   `font-display` utilities without a config file. The matching short-name
-   aliases below (`--paper`, `--ink`, …) exist because ~60 inline style
-   blocks reach for `var(--paper)` directly; don't break them to save a few
-   keystrokes. */
+/* Single source of truth for design tokens. Tailwind generates utilities
+   for everything declared here: bg-paper, text-ink, border-rule, font-mono,
+   text-xs, p-3 (= 0.75rem), etc. Add new tokens here, never inline. */
 @theme {
   --color-paper: #ede5d3;
   --color-paper-deep: #d9cfba;
@@ -20,8 +18,21 @@
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "Iosevka", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Type scale — overrides tailwind defaults so text-xs etc match the design. */
+  --text-xs: 0.7rem;
+  --text-sm: 0.8rem;
+  --text-base: 0.85rem;
+  --text-md: 0.95rem;
+  --text-lg: 1rem;
+  --text-xl: 1.15rem;
+
+  /* Spacing rhythm (0.25rem step). p-3 = 0.75rem, gap-4 = 1rem, etc. */
+  --spacing: 0.25rem;
 }
 
+/* Transitional aliases — many components still reach for var(--ink) etc inline.
+   These will be removed once the migration to tailwind utilities is complete. */
 :root {
   --paper: var(--color-paper);
   --paper-deep: var(--color-paper-deep);
@@ -32,8 +43,6 @@
   --rule: var(--color-rule);
   --highlight: var(--color-highlight);
 
-  /* Font-size scale. Consumers: inline `style={{fontSize: '0.85rem'}}` should
-     migrate to var(--fs-base). Keep additions semantic, not numeric. */
   --fs-xs: 0.7rem;
   --fs-sm: 0.8rem;
   --fs-base: 0.85rem;
@@ -41,7 +50,6 @@
   --fs-lg: 1rem;
   --fs-xl: 1.15rem;
 
-  /* Spacing scale (4/8px rhythm). */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -131,7 +139,10 @@ h4 {
   line-height: 1.35;
 }
 
-a {
+/* Anchor styles scoped to prose content only — UI links (nav, task rows,
+   breadcrumbs) define their own styling via component classes and shouldn't
+   inherit the markdown-link underline. */
+.prose a {
   color: var(--accent);
   text-decoration: underline;
   text-decoration-thickness: 1px;
@@ -142,17 +153,15 @@ a {
     text-decoration-color 120ms ease,
     color 120ms ease;
 }
-a:hover {
+.prose a:hover {
   text-decoration-thickness: 2px;
   text-decoration-color: var(--accent);
 }
-/* A corpus of cross-referenced theses only works if the reader remembers what
-   they've already read. Desaturated oxblood + muted underline signals "seen". */
-a:visited {
+.prose a:visited {
   color: color-mix(in oklab, var(--accent) 65%, var(--ink-soft));
   text-decoration-color: color-mix(in oklab, var(--accent-soft) 50%, var(--ink-soft));
 }
-a:visited:hover {
+.prose a:visited:hover {
   color: var(--accent);
   text-decoration-color: var(--accent);
 }

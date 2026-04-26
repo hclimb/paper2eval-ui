@@ -17,8 +17,6 @@ type Props = {
 
 export default function SectionHead({ label }: Props) {
   return (
-    <h1 className="eyebrow" style={{ marginBottom: 'var(--space-4)' }}>
-      {label}
-    </h1>
+    <h1 className="eyebrow mb-4">{label}</h1>
   )
 }
