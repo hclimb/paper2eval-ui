@@ -1,6 +1,6 @@
-import { createServerFn } from '@tanstack/react-start'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, normalize, relative } from 'node:path'
+import { createServerFn } from '@tanstack/react-start'
 import { markdownToHtml } from './markdown'
 
 const DOCS_ROOT = join(process.cwd(), 'public', 'docs')

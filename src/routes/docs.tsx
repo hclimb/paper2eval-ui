@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import RouteErrorPanel from '#/components/RouteErrorPanel'
 import SectionHead from '#/components/SectionHead'
 import { SITE } from '#/lib/constants'
-import { fetchDocContent, fetchDocList } from '#/lib/doc-fns'
+import { fetchDocContent, fetchDocList } from '#/lib/docs.api'
 import { TREE_THEME_COLORS } from '#/lib/tree-theme'
 
 const ACRONYMS = new Set(['json', 'api', 'gpu', 'cpu', 'llm', 'rlvr', 'ui'])
@@ -16,11 +16,7 @@ function prettifySegment(seg: string): string {
 }
 
 function prettifyPath(path: string): string {
-  return path
-    .replace(/\.md$/, '')
-    .split('/')
-    .map(prettifySegment)
-    .join('/')
+  return path.replace(/\.md$/, '').split('/').map(prettifySegment).join('/')
 }
 
 export const Route = createFileRoute('/docs')({
