@@ -82,12 +82,19 @@ export function PipelineTimeline({ steps }: { steps: TimelineStep[] }) {
 
 function StepCard({ step }: { step: TimelineStep }) {
   return (
-    <article id={`pipeline-step-${step.num}`} className="scroll-mt-32">
-      <header className="grid grid-cols-[3.5rem_1fr] gap-4 items-baseline mb-5">
-        <span className="font-mono text-4xl tabular-nums leading-none text-ink-soft/40 select-none">
-          {String(step.num).padStart(2, '0')}
-        </span>
-        <div className="min-w-0">
+    <article
+      id={`pipeline-step-${step.num}`}
+      className="scroll-mt-36 grid grid-cols-[3.5rem_1fr] gap-4"
+    >
+      <div className="relative">
+        <div className="sticky top-36 pt-1">
+          <span className="font-mono text-4xl tabular-nums leading-none text-ink-soft/40 select-none block">
+            {String(step.num).padStart(2, '0')}
+          </span>
+        </div>
+      </div>
+      <div className="min-w-0">
+        <header className="mb-5">
           <div className="flex items-baseline gap-3 flex-wrap mb-1.5">
             <h3 className="font-mono text-xl text-ink uppercase tracking-[0.05em] font-bold m-0 leading-none">
               {step.name}
@@ -97,9 +104,7 @@ function StepCard({ step }: { step: TimelineStep }) {
           <p className="font-body text-base text-ink leading-snug max-w-[65ch] m-0">
             {step.decision}
           </p>
-        </div>
-      </header>
-      <div className="pl-[4.5rem]">
+        </header>
         <DeepDive step={step} />
       </div>
     </article>
