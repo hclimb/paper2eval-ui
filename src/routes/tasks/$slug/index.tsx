@@ -99,12 +99,7 @@ function TaskDetail() {
         </Section>
 
         <Section title="Sandbox">
-          <SandboxSection
-            toml={toml}
-            claims={claims}
-            sizing={meta?.sizing ?? null}
-            trainingCorpus={meta?.trainingCorpus ?? null}
-          />
+          <SandboxSection toml={toml} claims={claims} />
         </Section>
 
         <Section title="Instruction (raw)">
@@ -149,7 +144,7 @@ function TaskDetail() {
 
       {/* ── PART 3: HOW IT WAS BUILT ─────────────────────────── */}
       {(meta?.pipeline.steps.length ?? 0) > 0 && (
-        <Group label="How it was built" subtitle="paper2eval's pipeline turning the paper into this task">
+        <Group label="How it was built" subtitle="paper2eval pipeline that turned the paper into this task">
           <PipelineTimeline steps={meta?.pipeline.steps ?? []} />
         </Group>
       )}
@@ -186,13 +181,22 @@ function Group({
   subtitle: string
   children: ReactNode
 }) {
+  const id = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
   return (
-    <section className="mt-16 first-of-type:mt-12 mb-4">
-      <header className="mb-8 pb-3 border-b-2 border-ink">
-        <h2 className="font-mono text-3xl text-ink uppercase tracking-[0.06em] font-bold m-0 leading-none">
+    <section id={id} className="mt-20 first-of-type:mt-12 mb-4 scroll-mt-20">
+      <header className="bg-ink text-paper px-3 py-2 mb-8 flex items-baseline gap-3 flex-wrap">
+        <h2 className="font-mono text-xs uppercase tracking-[0.18em] font-bold m-0 leading-none">
           {label}
         </h2>
-        <p className="font-body text-base text-ink-soft m-0 mt-1.5 italic">{subtitle}</p>
+        <span className="font-mono text-[10px] leading-none opacity-60">
+          //
+        </span>
+        <span className="font-mono text-[11px] lowercase leading-none opacity-80">
+          {subtitle}
+        </span>
       </header>
       <div>{children}</div>
     </section>
@@ -207,44 +211,56 @@ function TaskGoal({
   agentTimeoutSec: number
 }) {
   const direction = claims.metric_direction === 'higher_is_better' ? '↑' : '↓'
-  const verb = claims.metric_direction === 'higher_is_better' ? 'push' : 'drive'
-  const headline = `${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${claims.metric_name} on ${claims.benchmark_name} from ${claims.baseline_value.toFixed(1)} ${direction} ${claims.target_value.toFixed(1)} within ${formatDuration(agentTimeoutSec)}.`
+  const verb = claims.metric_direction === 'higher_is_better' ? 'Push' : 'Drive'
   const baseModelShort =
     claims.base_model_hf_id.split('/').pop() ?? claims.base_model_hf_id
+  const dataset = claims.allowed_datasets[0]
+  const datasetShort = dataset ? (dataset.split('/').pop() ?? dataset) : null
+  const moreDatasets = claims.allowed_datasets.length - 1
+
   return (
-    <div className="space-y-5">
-      <p className="font-body text-xl text-ink leading-snug max-w-[60ch] m-0 font-medium">
-        {headline}
+    <div className="space-y-4">
+      <p className="font-body text-2xl text-ink leading-tight max-w-[60ch] m-0 font-medium">
+        {verb} {claims.metric_name} on {claims.benchmark_name} from{' '}
+        <span className="tabular-nums">{claims.baseline_value.toFixed(1)}</span> {direction}{' '}
+        <span className="tabular-nums text-accent font-semibold">
+          {claims.target_value.toFixed(1)}
+        </span>{' '}
+        within {formatDuration(agentTimeoutSec)}.
       </p>
-      <dl className="m-0 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 font-mono text-sm max-w-[70ch]">
-        <dt className="text-ink-soft">target</dt>
-        <dd className="text-ink m-0">
-          <span className="text-accent font-semibold">
-            {claims.metric_name} {direction} {claims.target_value.toFixed(1)}
-          </span>
-          <span className="text-ink-soft text-xs">
-            {' '}
-            · paper baseline {claims._meta?.paper_baseline ?? '?'} · paper best{' '}
-            {claims._meta?.paper_best ?? '?'}
-          </span>
-        </dd>
-        <dt className="text-ink-soft">time budget</dt>
-        <dd className="text-ink m-0">{formatDuration(agentTimeoutSec)}</dd>
-        <dt className="text-ink-soft">base model</dt>
-        <dd className="text-ink m-0">{baseModelShort}</dd>
-        {claims.allowed_datasets.length > 0 && (
-          <>
-            <dt className="text-ink-soft">training data</dt>
-            <dd className="text-ink m-0">{claims.allowed_datasets.join(', ')}</dd>
-          </>
-        )}
-        <dt className="text-ink-soft">scoring</dt>
-        <dd className="text-ink m-0">
-          {claims.metric_name}{' '}
-          <span className="text-ink-soft text-xs">· {claims.metric_direction}</span>
-        </dd>
-      </dl>
-      <details>
+
+      {(baseModelShort || datasetShort) && (
+        <p className="font-body text-base text-ink-soft leading-relaxed max-w-[65ch] m-0">
+          Starting from{' '}
+          <a
+            href={`https://huggingface.co/${claims.base_model_hf_id}`}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-ink hover:text-accent"
+          >
+            {baseModelShort}
+          </a>
+          {datasetShort && (
+            <>
+              , training on{' '}
+              <a
+                href={`https://huggingface.co/datasets/${dataset}`}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-ink hover:text-accent"
+              >
+                {datasetShort}
+              </a>
+              {moreDatasets > 0 && (
+                <span className="text-ink-soft"> +{moreDatasets} more</span>
+              )}
+            </>
+          )}
+          .
+        </p>
+      )}
+
+      <details className="pt-2">
         <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
           show full task spec
         </summary>
@@ -265,9 +281,9 @@ function Hint({ children }: { children: ReactNode }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mb-12">
-      <h2 className="font-mono text-sm text-ink uppercase tracking-[0.12em] font-semibold border-b border-rule pb-2 mb-5">
+      <h3 className="font-mono text-sm text-ink uppercase tracking-[0.12em] font-semibold border-b border-rule pb-2 mb-5">
         {title}
-      </h2>
+      </h3>
       {children}
     </section>
   )
@@ -381,6 +397,12 @@ function ScoringSection({
   )
 }
 
+type NumberMark = {
+  value: number
+  label: string
+  highlight?: boolean
+}
+
 function NumbersSection({
   claims,
   provenance,
@@ -392,71 +414,71 @@ function NumbersSection({
   const paperBaseline = typeof meta.paper_baseline === 'number' ? meta.paper_baseline : null
   const paperBest = typeof meta.paper_best === 'number' ? meta.paper_best : null
   const rescaled = !!meta.scope_rescaled
-  const showCompare = paperBaseline != null && paperBest != null && rescaled
-  const rescaleMethod = typeof meta.rescale_method === 'string' ? meta.rescale_method : null
+  const showPaperAxis = paperBaseline != null && paperBest != null
+
+  const allValues = [
+    claims.baseline_value,
+    claims.target_value,
+    claims.paper_best_value,
+    ...(showPaperAxis ? [paperBaseline, paperBest] : []),
+  ]
+  const padding = (Math.max(...allValues) - Math.min(...allValues)) * 0.12 + 1
+  const minV = Math.floor(Math.min(...allValues) - padding)
+  const maxV = Math.ceil(Math.max(...allValues) + padding)
+  const pct = (v: number) => ((v - minV) / (maxV - minV)) * 100
+
+  const taskMarks: NumberMark[] = [
+    { value: claims.baseline_value, label: 'baseline' },
+    { value: claims.target_value, label: 'target', highlight: true },
+    { value: claims.paper_best_value, label: 'best (rescaled)' },
+  ]
+  const paperMarks: NumberMark[] = showPaperAxis
+    ? [
+        { value: paperBaseline, label: 'baseline' },
+        { value: paperBest, label: 'best' },
+      ]
+    : []
+
+  const tickValues = [minV, Math.round((minV + maxV) / 2), maxV]
 
   return (
-    <div className="space-y-4">
-      {showCompare ? (
-        <div className="grid grid-cols-[10rem_1fr_1fr] gap-4 font-mono text-sm">
-          <span className="text-ink-soft" />
-          <span className="text-ink-soft uppercase text-xs tracking-wider">paper</span>
-          <span className="text-ink-soft uppercase text-xs tracking-wider">scoped (this task)</span>
-
-          <span className="text-ink-soft">baseline</span>
-          <span className="text-ink tabular-nums">{paperBaseline}</span>
-          <span className="text-ink tabular-nums">{claims.baseline_value.toFixed(1)}</span>
-
-          <span className="text-ink-soft">target</span>
-          <span className="text-ink tabular-nums">
-            {typeof meta.paper_target === 'number' ? meta.paper_target : '—'}
-          </span>
-          <span className="text-accent tabular-nums font-semibold">
-            {claims.target_value.toFixed(1)}
-          </span>
-
-          <span className="text-ink-soft">paper best</span>
-          <span className="text-ink tabular-nums">{paperBest}</span>
-          <span className="text-ink tabular-nums">{claims.paper_best_value.toFixed(1)}</span>
+    <div className="space-y-6">
+      <div className="bg-paper-deep/30 border border-rule rounded-sm px-5 pt-6 pb-3">
+        {showPaperAxis && (
+          <NumberAxis label="paper" marks={paperMarks} pct={pct} variant="muted" />
+        )}
+        <NumberAxis label="this task" marks={taskMarks} pct={pct} variant="primary" />
+        <div className="ml-24 mr-4 flex justify-between font-mono text-[10px] tabular-nums text-ink-soft pt-1 border-t border-rule">
+          {tickValues.map((t) => (
+            <span key={t}>{t}</span>
+          ))}
         </div>
-      ) : (
-        <dl className="m-0">
-          <Row label="baseline">{claims.baseline_value.toFixed(1)}</Row>
-          <Row label="target">
-            <span className="text-accent font-semibold">
-              {claims.target_value.toFixed(1)}
-            </span>
-          </Row>
-          <Row label="paper best">{claims.paper_best_value.toFixed(1)}</Row>
-        </dl>
-      )}
-      {claims.baseline_method && (
-        <p className="font-mono text-xs text-ink-soft leading-relaxed max-w-[75ch] m-0 mt-3">
-          {claims.baseline_method}
-          {rescaleMethod && (
-            <>
-              {' · method: '}
-              <span className="text-ink">{rescaleMethod}</span>
-            </>
-          )}
+      </div>
+
+      {rescaled && (
+        <p className="font-body text-sm text-ink-soft leading-relaxed max-w-[65ch] m-0">
+          Paper numbers were rescaled to fit this task's smaller compute envelope. The relative
+          headroom between baseline and best is preserved, so the agent's challenge is
+          equivalent in difficulty.
         </p>
       )}
+
       {provenance && (provenance.baselineTableRef || provenance.paperBestTableRef) && (
-        <details className="mt-3">
+        <details>
           <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
             where these numbers came from
           </summary>
           <div className="mt-4 space-y-5">
             {provenance.baselineTableRef && (
               <CitationBlock
-                label="baseline (85.0)"
+                label={`baseline (${(paperBaseline ?? claims.baseline_value).toFixed(1)})`}
                 source={provenance.baselineTableRef}
                 citation={provenance.baselineCitation}
               />
             )}
             {provenance.paperBestTableRef && (
               <CitationBlock
-                label="paper best (90.6)"
+                label={`paper best (${(paperBest ?? claims.paper_best_value).toFixed(1)})`}
                 source={provenance.paperBestTableRef}
                 citation={provenance.paperBestCitation}
               />
@@ -464,31 +486,70 @@ function NumbersSection({
           </div>
         </details>
       )}
-      {claims.reward_thresholds.length > 1 && (
-        <details className="mt-3">
-          <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
-            reward curve · {claims.reward_thresholds.length} thresholds
-          </summary>
-          <div className="mt-3 grid grid-cols-[6rem_4rem_1fr] gap-x-4 font-mono text-sm tabular-nums max-w-md">
-            {claims.reward_thresholds.map((t) => {
-              const isFull = t.reward >= 1
-              const cls = isFull ? 'text-ink' : 'text-ink-soft'
-              return (
-                <div key={t.value} className="contents">
-                  <span className={cls}>{t.value.toFixed(1)}</span>
-                  <span className={cls}>{t.reward.toFixed(2)}</span>
-                  <div className="flex items-center">
-                    <div
-                      className={isFull ? 'h-1 bg-accent rounded-sm' : 'h-1 bg-ink-soft/40 rounded-sm'}
-                      style={{ width: `${t.reward * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </details>
-      )}
+    </div>
+  )
+}
+
+function NumberAxis({
+  label,
+  marks,
+  pct,
+  variant,
+}: {
+  label: string
+  marks: NumberMark[]
+  pct: (v: number) => number
+  variant: 'primary' | 'muted'
+}) {
+  const sortedMarks = [...marks].sort((a, b) => a.value - b.value)
+  const lineClass = variant === 'primary' ? 'bg-ink' : 'bg-rule'
+  const dotClass = variant === 'primary' ? 'bg-ink' : 'bg-ink-soft'
+
+  return (
+    <div className="flex items-stretch mb-7">
+      <div className="w-24 shrink-0 pt-3">
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft leading-none">
+          {label}
+        </div>
+      </div>
+      <div className="flex-1 relative h-16 mr-4 min-w-0">
+        <div className={`absolute top-3 left-0 right-0 h-px ${lineClass}`} />
+        {sortedMarks.map((m) => {
+          const left = pct(m.value)
+          const isHighlight = !!m.highlight
+          return (
+            <div
+              key={`${m.label}-${m.value}`}
+              className="absolute -translate-x-1/2 flex flex-col items-center"
+              style={{ left: `${left}%`, top: 0 }}
+            >
+              <div
+                className={`w-2.5 h-2.5 mt-2 rounded-full ${
+                  isHighlight ? 'bg-accent ring-2 ring-accent/30' : dotClass
+                }`}
+              />
+              <div
+                className={`mt-2 font-mono tabular-nums leading-none whitespace-nowrap ${
+                  isHighlight
+                    ? 'text-accent font-semibold text-base'
+                    : variant === 'primary'
+                      ? 'text-ink text-sm'
+                      : 'text-ink-soft text-sm'
+                }`}
+              >
+                {m.value.toFixed(1)}
+              </div>
+              <div
+                className={`mt-1 font-mono text-[10px] uppercase tracking-wider whitespace-nowrap leading-none ${
+                  isHighlight ? 'text-accent' : 'text-ink-soft'
+                }`}
+              >
+                {m.label}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -496,100 +557,73 @@ function NumbersSection({
 function SandboxSection({
   toml,
   claims,
-  sizing,
-  trainingCorpus,
 }: {
   toml: TaskToml
   claims: Claims
-  sizing: TaskMeta['sizing'] | null
-  trainingCorpus: TaskMeta['trainingCorpus'] | null
 }) {
   const env = toml.environment
-  const compute = `${env.gpus}× ${env.gpu_types.join(', ')} · ${formatBytes(env.memory_mb * 1024 * 1024)} RAM · ${env.cpus} CPU · internet ${env.allow_internet ? 'on' : 'off'}`
+  const ramGb = Math.round((env.memory_mb * 1024 * 1024) / 1e9)
+  const blocked = claims.block_list?.arxiv_ids ?? []
 
   return (
-    <div className="space-y-4">
-      <dl className="m-0">
-        <Row label="compute">{compute}</Row>
-        <Row label="agent budget">
-          <span className="text-accent font-semibold">{formatDuration(toml.agent.timeout_sec)}</span>
-        </Row>
-        <Row label="model">
-          <ExtLink href={`https://huggingface.co/${claims.base_model_hf_id}`}>
-            {claims.base_model_hf_id}
-          </ExtLink>
-          {claims.base_model_architecture && (
-            <span className="text-ink-soft"> · {claims.base_model_architecture}</span>
-          )}
-        </Row>
-        {claims.allowed_datasets.length > 0 && (
-          <Row label="datasets">
-            {claims.allowed_datasets.map((d, i) => (
-              <span key={d}>
-                {i > 0 && ', '}
-                <ExtLink href={`https://huggingface.co/datasets/${d}`}>{d}</ExtLink>
-              </span>
-            ))}
+    <div className="space-y-7">
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft mb-3">
+          compute
+        </div>
+        <dl className="m-0">
+          <Row label="gpus">
+            <span className="tabular-nums">{env.gpus}</span>
+            {' × '}
+            {env.gpu_types.join(', ')}
           </Row>
-        )}
-        {claims.block_list?.arxiv_ids && claims.block_list.arxiv_ids.length > 0 && (
-          <Row label="blocked from">
-            <span className="text-ink-soft text-xs">
-              the agent cannot use: arxiv:{claims.block_list.arxiv_ids.join(', arxiv:')}
+          <Row label="ram">
+            <span className="tabular-nums">{ramGb}</span> GB
+          </Row>
+          <Row label="cpus">
+            <span className="tabular-nums">{env.cpus}</span>
+          </Row>
+          <Row label="internet">{env.allow_internet ? 'allowed' : 'blocked'}</Row>
+        </dl>
+      </div>
+
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft mb-3">
+          agent
+        </div>
+        <dl className="m-0">
+          <Row label="time budget">
+            <span className="text-accent font-semibold tabular-nums">
+              {formatDuration(toml.agent.timeout_sec)}
             </span>
           </Row>
-        )}
-      </dl>
-      {trainingCorpus?.description && (
-        <div>
-          <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-1">
-            training corpus
-          </div>
-          <p className="font-body text-sm text-ink leading-relaxed max-w-[75ch] m-0">
-            {trainingCorpus.description}
-          </p>
-          {trainingCorpus.citation && (
-            <p className="font-mono text-xs text-ink-soft leading-relaxed mt-2 max-w-[75ch] m-0">
-              <span className="uppercase tracking-wider">paper says: </span>"
-              {trainingCorpus.citation}"
-            </p>
+          <Row label="base model">
+            <ExtLink href={`https://huggingface.co/${claims.base_model_hf_id}`}>
+              {claims.base_model_hf_id}
+            </ExtLink>
+          </Row>
+          {claims.allowed_datasets.length > 0 && (
+            <Row label="training data">
+              {claims.allowed_datasets.map((d, i) => (
+                <span key={d}>
+                  {i > 0 && ', '}
+                  <ExtLink href={`https://huggingface.co/datasets/${d}`}>{d}</ExtLink>
+                </span>
+              ))}
+            </Row>
           )}
-        </div>
-      )}
-      {sizing && (
-        <details className="mt-3">
-          <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
-            why these specs? — pipeline sizing reasoning
-          </summary>
-          <dl className="m-0 mt-3">
-            {sizing.trainingMethod && (
-              <Row label="training">
-                {sizing.trainingMethod}
-                {sizing.loraRecommended && ' + LoRA'}
-              </Row>
-            )}
-            {sizing.estimatedWallHours != null && (
-              <Row label="est. wall time">~{sizing.estimatedWallHours}h</Row>
-            )}
-            {sizing.trainingStepsPerRun != null && (
-              <Row label="steps">{sizing.trainingStepsPerRun}</Row>
-            )}
-            {sizing.maxGenerationLength != null && (
-              <Row label="max generation">{sizing.maxGenerationLength.toLocaleString()} tokens</Row>
-            )}
-          </dl>
-          {sizing.reasoning && (
-            <p className="font-mono text-xs text-ink-soft leading-relaxed mt-3 max-w-[75ch]">
-              {sizing.reasoning}
-            </p>
+          {blocked.length > 0 && (
+            <Row label="blocked refs">
+              {blocked.map((id, i) => (
+                <span key={id}>
+                  {i > 0 && ', '}
+                  <ExtLink href={`https://arxiv.org/abs/${id}`}>arxiv:{id}</ExtLink>
+                </span>
+              ))}
+            </Row>
           )}
-          {sizing.loraNote && (
-            <p className="font-mono text-xs text-ink-soft leading-relaxed mt-2 max-w-[75ch]">
-              {sizing.loraNote}
-            </p>
-          )}
-        </details>
-      )}
+        </dl>
+      </div>
     </div>
   )
 }
