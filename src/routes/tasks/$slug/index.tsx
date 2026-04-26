@@ -1,24 +1,34 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
-import { InstructionCollapse, KV, MetricProgress, Panel, RewardRow } from '#/components/DetailParts'
+import { Await, createFileRoute, defer, getRouteApi, Link } from '@tanstack/react-router'
+import type { DeferredPromise } from '@tanstack/router-core'
+import { type ReactNode, Suspense, useCallback, useState } from 'react'
+import type { Provenance } from '#/components/CreationLog'
 import { FileExplorer } from '#/components/FileExplorer'
-import { CreationLog, type Provenance } from '#/components/PipelineView'
+import { InstructionCollapse } from '#/components/Instruction'
+import { PipelineTimeline } from '#/components/PipelineTimeline'
 import RouteErrorPanel from '#/components/RouteErrorPanel'
-import SectionHead from '#/components/SectionHead'
 import { SITE } from '#/lib/constants'
-import { fetchAllTaskFiles, fetchTaskDetail } from '#/lib/server-fns'
-import { formatBytes, formatDuration } from '#/lib/formatters'
+import { fmtReward, formatBytes, formatDuration } from '#/lib/formatters'
+import { fetchRunList, type RunSummary } from '#/lib/runs.api'
+import {
+  fetchAllTaskFiles,
+  fetchTaskHeavy,
+  fetchTaskValidation,
+  type TaskMeta,
+  type TaskValidation,
+} from '#/lib/tasks.api'
 import type { Claims, TaskToml } from '#/lib/tasks'
 
-type LoaderData = {
-  slug: string
-  toml: TaskToml
-  claims: Claims
+const taskRoute = getRouteApi('/tasks/$slug')
+
+type IndexLoaderData = {
   instructionHtml: string
   filePaths: string[]
   totalSize: number
   fileCount: number
   provenance: Provenance | null
+  meta: TaskMeta | null
+  runs: RunSummary[]
+  validation: DeferredPromise<TaskValidation>
 }
 
 export const Route = createFileRoute('/tasks/$slug/')({
@@ -29,200 +39,840 @@ export const Route = createFileRoute('/tasks/$slug/')({
     ],
   }),
   loader: async ({ params }) => {
-    return fetchTaskDetail({ data: { slug: params.slug } })
+    const [heavy, runs] = await Promise.all([
+      fetchTaskHeavy({ data: { slug: params.slug } }),
+      fetchRunList({ data: { slug: params.slug } }),
+    ])
+    return {
+      ...heavy,
+      runs,
+      validation: defer(fetchTaskValidation({ data: { slug: params.slug } })),
+    }
   },
   component: TaskDetail,
   errorComponent: ({ error }) => <RouteErrorPanel error={error} />,
 })
 
 function TaskDetail() {
-  const { slug, toml, claims, instructionHtml, filePaths, totalSize, fileCount, provenance } =
-    Route.useLoaderData() as LoaderData
-
-  const env = toml.environment
+  const { slug, toml, claims } = taskRoute.useLoaderData()
+  const { instructionHtml, filePaths, totalSize, fileCount, meta, runs, validation } =
+    Route.useLoaderData() as IndexLoaderData
 
   return (
-    <main className="page-wrap" style={{ paddingBlock: 'var(--space-6)' }}>
-      <nav
-        className="font-mono"
-        style={{
-          fontSize: 'var(--fs-sm)',
-          marginBottom: 'var(--space-2)',
-          display: 'flex',
-          alignItems: 'baseline',
-          gap: 'var(--space-2)',
-        }}
-      >
+    <main className="page-wrap py-8">
+      <nav className="font-mono text-sm mb-6 flex items-baseline gap-2">
         <Link to="/" className="muted">
           tasks
         </Link>
-        <span style={{ color: 'var(--rule)' }}>/</span>
-        <span style={{ color: 'var(--ink)' }}>{slug}</span>
+        <span className="text-rule">/</span>
+        <span className="text-ink">{slug}</span>
       </nav>
 
-      <SectionHead label={`/${slug.toUpperCase()}`} />
-
-      <div style={{ marginBottom: 'var(--space-5)', maxWidth: '65ch' }}>
-        <p
-          className="font-body"
-          style={{
-            fontSize: 'var(--fs-md)',
-            lineHeight: 1.5,
-            color: 'var(--ink)',
-            margin: 0,
-          }}
-        >
-          {claims.paper_title}
+      <h1 className="font-body text-2xl font-semibold text-ink leading-tight max-w-[70ch] mb-2">
+        {claims.paper_title}
+      </h1>
+      {claims.paper_id && (
+        <p className="font-mono text-sm mb-10">
+          <a
+            href={`https://arxiv.org/abs/${claims.paper_id}`}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-ink-soft hover:text-accent"
+          >
+            arxiv:{claims.paper_id} ↗
+          </a>
         </p>
-        {claims.paper_id && (
-          <p
-            className="font-mono"
-            style={{
-              fontSize: 'var(--fs-sm)',
-              color: 'var(--ink-soft)',
-              margin: 'var(--space-1) 0 0 0',
-            }}
-          >
-            arxiv:{claims.paper_id}
-          </p>
-        )}
-      </div>
+      )}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: 'var(--space-4)',
-          marginBottom: 'var(--space-6)',
-        }}
-      >
-        <Panel title="METRIC">
-          <KV label="metric" value={claims.metric_name} />
-          <KV label="direction" value={claims.metric_direction} />
-          <KV label="baseline" value={String(claims.baseline_value)} />
-          <KV label="target" value={String(claims.target_value)} accent />
-          <KV label="paper best" value={String(claims.paper_best_value)} />
-          <MetricProgress
-            baseline={claims.baseline_value}
-            target={claims.target_value}
-            paperBest={claims.paper_best_value}
-            direction={claims.metric_direction}
+      {/* ── PART 1: THE TASK ─────────────────────────────────── */}
+      <Group label="The task" subtitle="what the agent must do">
+        <Section title="Goal">
+          <TaskGoal claims={claims} agentTimeoutSec={toml.agent.timeout_sec} />
+        </Section>
+
+        <Section title="Scoring">
+          <ScoringSection claims={claims} sample={meta?.benchmark} />
+        </Section>
+
+        <Section title="Numbers">
+          <NumbersSection claims={claims} provenance={meta?.provenance ?? null} />
+        </Section>
+
+        <Section title="Sandbox">
+          <SandboxSection
+            toml={toml}
+            claims={claims}
+            sizing={meta?.sizing ?? null}
+            trainingCorpus={meta?.trainingCorpus ?? null}
           />
-        </Panel>
+        </Section>
 
-        <Panel title="ENVIRONMENT">
-          <KV label="gpus" value={`${env.gpus}× ${env.gpu_types.join(', ')}`} />
-          <KV label="cpus" value={String(env.cpus)} />
-          <KV label="memory" value={formatBytes(env.memory_mb * 1024 * 1024)} />
-          <KV label="storage" value={formatBytes(env.storage_mb * 1024 * 1024)} />
-          <KV label="internet" value={env.allow_internet ? 'yes' : 'no'} />
-        </Panel>
+        <Section title="Instruction (raw)">
+          <InstructionCollapse instructionHtml={instructionHtml} />
+        </Section>
+      </Group>
 
-        <Panel title="TIMING">
-          <KV label="build timeout" value={formatDuration(env.build_timeout_sec)} />
-          <KV label="agent timeout" value={formatDuration(toml.agent.timeout_sec)} accent />
-          <KV label="verifier timeout" value={formatDuration(toml.verifier.timeout_sec)} />
-        </Panel>
+      {/* ── PART 2: THE PAPER ────────────────────────────────── */}
+      {meta && (
+        <Group label="The paper" subtitle="what the original research is about">
+          {meta.research.problem && (
+            <Section title="Problem (paper's words)">
+              <Prose>{meta.research.problem}</Prose>
+            </Section>
+          )}
 
-        <Panel title="MODEL">
-          <KV label="base model" value={claims.base_model_hf_id} />
-          <KV label="allowed" value={claims.allowed_models.join(', ')} />
-          <KV label="datasets" value={claims.allowed_datasets.join(', ')} />
-        </Panel>
-      </div>
+          {meta.research.solutionBrief && (
+            <Section title="Approach (paper's words)">
+              <Prose>{meta.research.solutionBrief}</Prose>
+            </Section>
+          )}
 
-      {claims.reward_thresholds.length > 0 && (
-        <section style={{ marginBottom: 'var(--space-6)' }}>
-          <h2 className="meta-subhead">REWARD SCHEDULE</h2>
-          <div
-            className="font-mono"
-            style={{
-              fontSize: 'var(--fs-base)',
-              display: 'grid',
-              gridTemplateColumns: 'auto auto 1fr',
-              gap: '0',
-              maxWidth: '400px',
-              border: '1px solid color-mix(in oklab, var(--rule) 50%, transparent)',
-              borderRadius: '4px',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Header */}
-            <div
-              style={{
-                padding: 'var(--space-1) var(--space-3)',
-                fontSize: 'var(--fs-xs)',
-                color: 'var(--ink-soft)',
-                fontWeight: 600,
-                letterSpacing: '0.05em',
-                borderBottom: '1px solid color-mix(in oklab, var(--rule) 50%, transparent)',
-                background: 'color-mix(in oklab, var(--paper-deep) 60%, var(--paper))',
-              }}
-            >
-              VALUE
-            </div>
-            <div
-              style={{
-                padding: 'var(--space-1) var(--space-3)',
-                fontSize: 'var(--fs-xs)',
-                color: 'var(--ink-soft)',
-                fontWeight: 600,
-                letterSpacing: '0.05em',
-                borderBottom: '1px solid color-mix(in oklab, var(--rule) 50%, transparent)',
-                background: 'color-mix(in oklab, var(--paper-deep) 60%, var(--paper))',
-              }}
-            >
-              REWARD
-            </div>
-            <div
-              style={{
-                borderBottom: '1px solid color-mix(in oklab, var(--rule) 50%, transparent)',
-                background: 'color-mix(in oklab, var(--paper-deep) 60%, var(--paper))',
-              }}
-            />
-            {/* Rows */}
-            {claims.reward_thresholds.map((t, i) => {
-              const isLast = i === claims.reward_thresholds.length - 1
-              const borderB = isLast
-                ? 'none'
-                : '1px solid color-mix(in oklab, var(--rule) 30%, transparent)'
-              const isHigh = t.reward >= 0.85
+          <Section title="Paper meta">
+            <PaperSection paper={meta.paper} research={meta.research} claims={claims} />
+          </Section>
+
+          {meta.paper.hasFullContent && (
+            <Section title="Full paper">
+              <p className="font-mono text-sm">
+                <Link
+                  to="/tasks/$slug/paper"
+                  params={{ slug }}
+                  className="text-ink hover:text-accent"
+                >
+                  open paper reader →
+                </Link>
+              </p>
+            </Section>
+          )}
+        </Group>
+      )}
+
+      {/* ── PART 3: HOW IT WAS BUILT ─────────────────────────── */}
+      {(meta?.pipeline.steps.length ?? 0) > 0 && (
+        <Group label="How it was built" subtitle="paper2eval's pipeline turning the paper into this task">
+          <PipelineTimeline steps={meta?.pipeline.steps ?? []} />
+        </Group>
+      )}
+
+      {/* ── PART 4: RESULTS & ARTIFACTS ──────────────────────── */}
+      <Group label="Results & artifacts" subtitle="runs, validation, source files">
+        <Section title={`Runs · ${runs.length}`}>
+          <RunsSection slug={slug} runs={runs} target={claims.target_value} />
+        </Section>
+
+        <Section title="Validation">
+          <Suspense fallback={<Hint>loading validation…</Hint>}>
+            <Await promise={validation}>{(v) => <ValidationSection v={v} />}</Await>
+          </Suspense>
+        </Section>
+
+        <Section title={`Files · ${fileCount} · ${formatBytes(totalSize)}`}>
+          <div className="flex justify-end mb-3">
+            <DownloadButton slug={slug} />
+          </div>
+          <FileExplorer paths={filePaths} slug={slug} />
+        </Section>
+      </Group>
+    </main>
+  )
+}
+
+function Group({
+  label,
+  subtitle,
+  children,
+}: {
+  label: string
+  subtitle: string
+  children: ReactNode
+}) {
+  return (
+    <section className="mt-16 first-of-type:mt-12 mb-4">
+      <header className="mb-8 pb-3 border-b-2 border-ink">
+        <h2 className="font-mono text-3xl text-ink uppercase tracking-[0.06em] font-bold m-0 leading-none">
+          {label}
+        </h2>
+        <p className="font-body text-base text-ink-soft m-0 mt-1.5 italic">{subtitle}</p>
+      </header>
+      <div>{children}</div>
+    </section>
+  )
+}
+
+function TaskGoal({
+  claims,
+  agentTimeoutSec,
+}: {
+  claims: Claims
+  agentTimeoutSec: number
+}) {
+  const direction = claims.metric_direction === 'higher_is_better' ? '↑' : '↓'
+  const verb = claims.metric_direction === 'higher_is_better' ? 'push' : 'drive'
+  const headline = `${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${claims.metric_name} on ${claims.benchmark_name} from ${claims.baseline_value.toFixed(1)} ${direction} ${claims.target_value.toFixed(1)} within ${formatDuration(agentTimeoutSec)}.`
+  const baseModelShort =
+    claims.base_model_hf_id.split('/').pop() ?? claims.base_model_hf_id
+  return (
+    <div className="space-y-5">
+      <p className="font-body text-xl text-ink leading-snug max-w-[60ch] m-0 font-medium">
+        {headline}
+      </p>
+      <dl className="m-0 grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 font-mono text-sm max-w-[70ch]">
+        <dt className="text-ink-soft">target</dt>
+        <dd className="text-ink m-0">
+          <span className="text-accent font-semibold">
+            {claims.metric_name} {direction} {claims.target_value.toFixed(1)}
+          </span>
+          <span className="text-ink-soft text-xs">
+            {' '}
+            · paper baseline {claims._meta?.paper_baseline ?? '?'} · paper best{' '}
+            {claims._meta?.paper_best ?? '?'}
+          </span>
+        </dd>
+        <dt className="text-ink-soft">time budget</dt>
+        <dd className="text-ink m-0">{formatDuration(agentTimeoutSec)}</dd>
+        <dt className="text-ink-soft">base model</dt>
+        <dd className="text-ink m-0">{baseModelShort}</dd>
+        {claims.allowed_datasets.length > 0 && (
+          <>
+            <dt className="text-ink-soft">training data</dt>
+            <dd className="text-ink m-0">{claims.allowed_datasets.join(', ')}</dd>
+          </>
+        )}
+        <dt className="text-ink-soft">scoring</dt>
+        <dd className="text-ink m-0">
+          {claims.metric_name}{' '}
+          <span className="text-ink-soft text-xs">· {claims.metric_direction}</span>
+        </dd>
+      </dl>
+      <details>
+        <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
+          show full task spec
+        </summary>
+        <p className="font-body text-sm text-ink leading-relaxed max-w-[75ch] mt-3 m-0">
+          {claims.research_goal}
+        </p>
+      </details>
+    </div>
+  )
+}
+
+function Hint({ children }: { children: ReactNode }) {
+  return <p className="font-mono text-xs text-ink-soft m-0">{children}</p>
+}
+
+// ─── primitives ──────────────────────────────────────────────────────
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mb-12">
+      <h2 className="font-mono text-sm text-ink uppercase tracking-[0.12em] font-semibold border-b border-rule pb-2 mb-5">
+        {title}
+      </h2>
+      {children}
+    </section>
+  )
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[10rem_1fr] gap-4 py-1 font-mono text-sm">
+      <span className="text-ink-soft">{label}</span>
+      <span className="text-ink break-words">{children}</span>
+    </div>
+  )
+}
+
+function Prose({ children }: { children: ReactNode }) {
+  return (
+    <p className="font-body text-base text-ink leading-relaxed max-w-[75ch] m-0">{children}</p>
+  )
+}
+
+function ExtLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="text-ink hover:text-accent break-all"
+    >
+      {children} ↗
+    </a>
+  )
+}
+
+function repoShort(url: string): string {
+  return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')
+}
+
+// ─── sections ────────────────────────────────────────────────────────
+
+function ScoringSection({
+  claims,
+  sample,
+}: {
+  claims: Claims
+  sample: TaskMeta['benchmark'] | undefined
+}) {
+  return (
+    <div className="space-y-4">
+      {claims.metric_description && (
+        <div>
+          <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-1">
+            metric — {claims.metric_name}
+          </div>
+          <Prose>{claims.metric_description}</Prose>
+        </div>
+      )}
+      {claims.eval_protocol && (
+        <div>
+          <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-1">
+            protocol
+          </div>
+          <Prose>{claims.eval_protocol}</Prose>
+        </div>
+      )}
+      <dl className="m-0">
+        <Row label="benchmark">
+          {claims.benchmark_name}
+          {claims.benchmark_hf_id && (
+            <>
+              {' · '}
+              <ExtLink href={`https://huggingface.co/datasets/${claims.benchmark_hf_id}`}>
+                {claims.benchmark_hf_id}
+              </ExtLink>
+            </>
+          )}
+        </Row>
+        {claims.benchmark_split && (
+          <Row label="split">
+            {claims.benchmark_split}
+            {sample?.testRows != null && (
+              <span className="text-ink-soft"> · {sample.testRows.toLocaleString()} rows</span>
+            )}
+          </Row>
+        )}
+        {claims.metric_lower_bound != null && claims.metric_upper_bound != null && (
+          <Row label="metric range">
+            {claims.metric_lower_bound} – {claims.metric_upper_bound}
+          </Row>
+        )}
+      </dl>
+      {sample?.sampleQuestion && (
+        <details className="mt-3">
+          <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
+            sample problem
+          </summary>
+          <div className="mt-3 p-4 bg-paper-deep border-l-2 border-rule">
+            <div className="font-mono text-xs text-ink-soft mb-2">QUESTION</div>
+            <p className="font-body text-sm text-ink leading-relaxed whitespace-pre-wrap">
+              {sample.sampleQuestion}
+            </p>
+            {sample.sampleAnswer && (
+              <>
+                <div className="font-mono text-xs text-ink-soft mt-3 mb-1">ANSWER</div>
+                <p className="font-mono text-sm text-ink m-0">{sample.sampleAnswer}</p>
+              </>
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
+function NumbersSection({
+  claims,
+  provenance,
+}: {
+  claims: Claims
+  provenance: TaskMeta['provenance'] | null
+}) {
+  const meta = claims._meta ?? {}
+  const paperBaseline = typeof meta.paper_baseline === 'number' ? meta.paper_baseline : null
+  const paperBest = typeof meta.paper_best === 'number' ? meta.paper_best : null
+  const rescaled = !!meta.scope_rescaled
+  const showCompare = paperBaseline != null && paperBest != null && rescaled
+  const rescaleMethod = typeof meta.rescale_method === 'string' ? meta.rescale_method : null
+
+  return (
+    <div className="space-y-4">
+      {showCompare ? (
+        <div className="grid grid-cols-[10rem_1fr_1fr] gap-4 font-mono text-sm">
+          <span className="text-ink-soft" />
+          <span className="text-ink-soft uppercase text-xs tracking-wider">paper</span>
+          <span className="text-ink-soft uppercase text-xs tracking-wider">scoped (this task)</span>
+
+          <span className="text-ink-soft">baseline</span>
+          <span className="text-ink tabular-nums">{paperBaseline}</span>
+          <span className="text-ink tabular-nums">{claims.baseline_value.toFixed(1)}</span>
+
+          <span className="text-ink-soft">target</span>
+          <span className="text-ink tabular-nums">
+            {typeof meta.paper_target === 'number' ? meta.paper_target : '—'}
+          </span>
+          <span className="text-accent tabular-nums font-semibold">
+            {claims.target_value.toFixed(1)}
+          </span>
+
+          <span className="text-ink-soft">paper best</span>
+          <span className="text-ink tabular-nums">{paperBest}</span>
+          <span className="text-ink tabular-nums">{claims.paper_best_value.toFixed(1)}</span>
+        </div>
+      ) : (
+        <dl className="m-0">
+          <Row label="baseline">{claims.baseline_value.toFixed(1)}</Row>
+          <Row label="target">
+            <span className="text-accent font-semibold">
+              {claims.target_value.toFixed(1)}
+            </span>
+          </Row>
+          <Row label="paper best">{claims.paper_best_value.toFixed(1)}</Row>
+        </dl>
+      )}
+      {claims.baseline_method && (
+        <p className="font-mono text-xs text-ink-soft leading-relaxed max-w-[75ch] m-0 mt-3">
+          {claims.baseline_method}
+          {rescaleMethod && (
+            <>
+              {' · method: '}
+              <span className="text-ink">{rescaleMethod}</span>
+            </>
+          )}
+        </p>
+      )}
+      {provenance && (provenance.baselineTableRef || provenance.paperBestTableRef) && (
+        <details className="mt-3">
+          <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
+            where these numbers came from
+          </summary>
+          <div className="mt-4 space-y-5">
+            {provenance.baselineTableRef && (
+              <CitationBlock
+                label="baseline (85.0)"
+                source={provenance.baselineTableRef}
+                citation={provenance.baselineCitation}
+              />
+            )}
+            {provenance.paperBestTableRef && (
+              <CitationBlock
+                label="paper best (90.6)"
+                source={provenance.paperBestTableRef}
+                citation={provenance.paperBestCitation}
+              />
+            )}
+          </div>
+        </details>
+      )}
+      {claims.reward_thresholds.length > 1 && (
+        <details className="mt-3">
+          <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
+            reward curve · {claims.reward_thresholds.length} thresholds
+          </summary>
+          <div className="mt-3 grid grid-cols-[6rem_4rem_1fr] gap-x-4 font-mono text-sm tabular-nums max-w-md">
+            {claims.reward_thresholds.map((t) => {
+              const isFull = t.reward >= 1
+              const cls = isFull ? 'text-ink' : 'text-ink-soft'
               return (
-                <RewardRow
-                  key={t.value}
-                  value={t.value}
-                  reward={t.reward}
-                  isHigh={isHigh}
-                  borderBottom={borderB}
-                />
+                <div key={t.value} className="contents">
+                  <span className={cls}>{t.value.toFixed(1)}</span>
+                  <span className={cls}>{t.reward.toFixed(2)}</span>
+                  <div className="flex items-center">
+                    <div
+                      className={isFull ? 'h-1 bg-accent rounded-sm' : 'h-1 bg-ink-soft/40 rounded-sm'}
+                      style={{ width: `${t.reward * 100}%` }}
+                    />
+                  </div>
+                </div>
               )
             })}
           </div>
-        </section>
+        </details>
+      )}
+    </div>
+  )
+}
+
+function SandboxSection({
+  toml,
+  claims,
+  sizing,
+  trainingCorpus,
+}: {
+  toml: TaskToml
+  claims: Claims
+  sizing: TaskMeta['sizing'] | null
+  trainingCorpus: TaskMeta['trainingCorpus'] | null
+}) {
+  const env = toml.environment
+  const compute = `${env.gpus}× ${env.gpu_types.join(', ')} · ${formatBytes(env.memory_mb * 1024 * 1024)} RAM · ${env.cpus} CPU · internet ${env.allow_internet ? 'on' : 'off'}`
+
+  return (
+    <div className="space-y-4">
+      <dl className="m-0">
+        <Row label="compute">{compute}</Row>
+        <Row label="agent budget">
+          <span className="text-accent font-semibold">{formatDuration(toml.agent.timeout_sec)}</span>
+        </Row>
+        <Row label="model">
+          <ExtLink href={`https://huggingface.co/${claims.base_model_hf_id}`}>
+            {claims.base_model_hf_id}
+          </ExtLink>
+          {claims.base_model_architecture && (
+            <span className="text-ink-soft"> · {claims.base_model_architecture}</span>
+          )}
+        </Row>
+        {claims.allowed_datasets.length > 0 && (
+          <Row label="datasets">
+            {claims.allowed_datasets.map((d, i) => (
+              <span key={d}>
+                {i > 0 && ', '}
+                <ExtLink href={`https://huggingface.co/datasets/${d}`}>{d}</ExtLink>
+              </span>
+            ))}
+          </Row>
+        )}
+        {claims.block_list?.arxiv_ids && claims.block_list.arxiv_ids.length > 0 && (
+          <Row label="blocked from">
+            <span className="text-ink-soft text-xs">
+              the agent cannot use: arxiv:{claims.block_list.arxiv_ids.join(', arxiv:')}
+            </span>
+          </Row>
+        )}
+      </dl>
+      {trainingCorpus?.description && (
+        <div>
+          <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-1">
+            training corpus
+          </div>
+          <p className="font-body text-sm text-ink leading-relaxed max-w-[75ch] m-0">
+            {trainingCorpus.description}
+          </p>
+          {trainingCorpus.citation && (
+            <p className="font-mono text-xs text-ink-soft leading-relaxed mt-2 max-w-[75ch] m-0">
+              <span className="uppercase tracking-wider">paper says: </span>"
+              {trainingCorpus.citation}"
+            </p>
+          )}
+        </div>
+      )}
+      {sizing && (
+        <details className="mt-3">
+          <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
+            why these specs? — pipeline sizing reasoning
+          </summary>
+          <dl className="m-0 mt-3">
+            {sizing.trainingMethod && (
+              <Row label="training">
+                {sizing.trainingMethod}
+                {sizing.loraRecommended && ' + LoRA'}
+              </Row>
+            )}
+            {sizing.estimatedWallHours != null && (
+              <Row label="est. wall time">~{sizing.estimatedWallHours}h</Row>
+            )}
+            {sizing.trainingStepsPerRun != null && (
+              <Row label="steps">{sizing.trainingStepsPerRun}</Row>
+            )}
+            {sizing.maxGenerationLength != null && (
+              <Row label="max generation">{sizing.maxGenerationLength.toLocaleString()} tokens</Row>
+            )}
+          </dl>
+          {sizing.reasoning && (
+            <p className="font-mono text-xs text-ink-soft leading-relaxed mt-3 max-w-[75ch]">
+              {sizing.reasoning}
+            </p>
+          )}
+          {sizing.loraNote && (
+            <p className="font-mono text-xs text-ink-soft leading-relaxed mt-2 max-w-[75ch]">
+              {sizing.loraNote}
+            </p>
+          )}
+        </details>
+      )}
+    </div>
+  )
+}
+
+function PaperSection({
+  paper,
+  research,
+}: {
+  paper: TaskMeta['paper']
+  research: TaskMeta['research']
+  claims: Claims
+}) {
+  const authorList =
+    paper.authors.length === 0
+      ? '—'
+      : paper.authors.length <= 3
+        ? paper.authors.join(', ')
+        : `${paper.authors.slice(0, 3).join(', ')} +${paper.authors.length - 3}`
+
+  return (
+    <div className="space-y-5">
+      {paper.abstract && (
+        <div>
+          <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-2">
+            abstract
+          </div>
+          <p className="font-body text-sm text-ink leading-relaxed max-w-[75ch] m-0">
+            {paper.abstract}
+          </p>
+        </div>
       )}
 
-      <section style={{ marginBottom: 'var(--space-6)' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            gap: 'var(--space-3)',
-            marginBottom: 'var(--space-3)',
-          }}
+      <dl className="m-0">
+        <Row label="authors">{authorList}</Row>
+        {paper.published && <Row label="published">{paper.published}</Row>}
+        {research.primaryMethod && <Row label="method">{research.primaryMethod}</Row>}
+        {research.framework && <Row label="framework">{research.framework}</Row>}
+        {research.paperCompute && <Row label="paper compute">{research.paperCompute}</Row>}
+        {paper.codeRepo && (
+          <Row label="code">
+            <ExtLink href={paper.codeRepo}>{repoShort(paper.codeRepo)}</ExtLink>
+          </Row>
+        )}
+        {paper.pdfUrl && (
+          <Row label="pdf">
+            <ExtLink href={paper.pdfUrl}>{repoShort(paper.pdfUrl)}</ExtLink>
+          </Row>
+        )}
+        {paper.topics.length > 0 && (
+          <Row label="topics">{paper.topics.slice(0, 5).join(', ')}</Row>
+        )}
+      </dl>
+
+      {(research.methodsCompared.length > 0 ||
+        research.modelsCompared.length > 0 ||
+        research.benchmarksCompared.length > 0) && (
+        <details className="mt-3">
+          <summary className="font-mono text-xs text-ink-soft uppercase tracking-wider cursor-pointer hover:text-ink select-none">
+            related work in the paper
+          </summary>
+          <dl className="m-0 mt-3">
+            {research.methodsCompared.length > 0 && (
+              <Row label="methods">{research.methodsCompared.join(', ')}</Row>
+            )}
+            {research.modelsCompared.length > 0 && (
+              <Row label="models">
+                {research.modelsCompared.map((m) => m.name.split('/').pop()).join(', ')}
+              </Row>
+            )}
+            {research.benchmarksCompared.length > 0 && (
+              <Row label="benchmarks">
+                {research.benchmarksCompared.map((b) => b.name).join(', ')}
+              </Row>
+            )}
+            {paper.keyReferenceCount > 0 && (
+              <Row label="references">{paper.keyReferenceCount} cited papers</Row>
+            )}
+          </dl>
+          {research.selectionReasoning && (
+            <p className="font-mono text-xs text-ink-soft leading-relaxed mt-3 max-w-[75ch]">
+              <span className="uppercase tracking-wider">why this benchmark: </span>
+              {research.selectionReasoning}
+            </p>
+          )}
+        </details>
+      )}
+    </div>
+  )
+}
+
+function CitationBlock({
+  label,
+  source,
+  citation,
+}: {
+  label: string
+  source: string
+  citation: string | null
+}) {
+  return (
+    <div>
+      <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-1">{label}</div>
+      <p className="font-mono text-sm text-ink m-0 mb-2">{source}</p>
+      {citation && (
+        <pre
+          className="font-mono text-xs text-ink m-0 p-3 bg-paper-deep border-l-2 border-rule overflow-x-auto whitespace-pre-wrap"
+          style={{ wordBreak: 'normal' }}
         >
-          <h2 className="meta-subhead" style={{ margin: 0 }}>
-            FILES — {fileCount} files · {formatBytes(totalSize)}
-          </h2>
-          <DownloadButton slug={slug} />
+          {citation}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+function ValidationSection({ v }: { v: TaskValidation }) {
+  if (!v.leakAudit && !v.resources) {
+    return <Hint>no validation logs.</Hint>
+  }
+  return (
+    <div className="space-y-6">
+      {v.leakAudit && (
+        <div>
+          <div className="flex items-baseline gap-3 mb-2 flex-wrap">
+            <Badge ok={v.leakAudit.allClean}>
+              {v.leakAudit.allClean ? 'no paper leakage' : 'leak detected'}
+            </Badge>
+            <span className="font-mono text-xs text-ink-soft">
+              {v.leakAudit.rounds} round{v.leakAudit.rounds !== 1 ? 's' : ''} audited
+            </span>
+          </div>
+          {v.leakAudit.latestAssessment && (
+            <p className="font-body text-sm text-ink-soft leading-relaxed mt-2 max-w-[75ch]">
+              {v.leakAudit.latestAssessment}
+            </p>
+          )}
         </div>
-        <FileExplorer paths={filePaths} slug={slug} />
-      </section>
+      )}
+      {v.resources && (
+        <div>
+          <div className="flex items-baseline gap-3 mb-2 flex-wrap">
+            <Badge ok={v.resources.notFound.length === 0}>
+              {v.resources.notFound.length === 0 ? 'resources verified' : 'resources missing'}
+            </Badge>
+            <span className="font-mono text-xs text-ink-soft">
+              {v.resources.modelsExisting}/{v.resources.modelsChecked} models ·{' '}
+              {v.resources.datasetsExisting}/{v.resources.datasetsChecked} datasets ·{' '}
+              {v.resources.benchmarksExisting}/{v.resources.benchmarksChecked} benchmarks
+            </span>
+          </div>
+          {v.resources.notFound.length > 0 && (
+            <p className="font-mono text-xs text-ink-soft m-0 mb-2">
+              not found: {v.resources.notFound.join(', ')}
+            </p>
+          )}
+          {v.resources.notes && (
+            <p className="font-body text-sm text-ink-soft leading-relaxed mt-2 max-w-[75ch] whitespace-pre-wrap m-0">
+              {v.resources.notes}
+            </p>
+          )}
+        </div>
+      )}
+      {v.resources?.externalCorpora && v.resources.externalCorpora.length > 0 && (
+        <div>
+          <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-2">
+            external corpora
+          </div>
+          <ul className="m-0 p-0 list-none space-y-3">
+            {v.resources.externalCorpora.map((c) => (
+              <li key={c.name}>
+                <div className="font-mono text-sm text-ink">{c.name}</div>
+                {c.description && (
+                  <p className="font-body text-sm text-ink-soft leading-relaxed mt-0.5 max-w-[75ch] m-0">
+                    {c.description}
+                  </p>
+                )}
+                {c.citation && (
+                  <p className="font-mono text-xs text-ink-soft mt-1 max-w-[75ch] m-0 italic">
+                    "{c.citation}"
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
 
-      {provenance && <CreationLog provenance={provenance} slug={slug} />}
+function Badge({ ok, children }: { ok: boolean; children: ReactNode }) {
+  const cls = ok
+    ? 'inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider px-2 py-0.5 rounded-sm'
+    : 'inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider px-2 py-0.5 rounded-sm'
+  const style = ok
+    ? { background: '#d1fae5', color: '#065f46' }
+    : { background: '#fee2e2', color: '#991b1b' }
+  return (
+    <span className={cls} style={style}>
+      <span aria-hidden="true">{ok ? '✓' : '✗'}</span>
+      {children}
+    </span>
+  )
+}
 
-      <InstructionCollapse instructionHtml={instructionHtml} />
-    </main>
+// ─── runs ────────────────────────────────────────────────────────────
+
+function RunsSection({ slug, runs, target }: { slug: string; runs: RunSummary[]; target: number }) {
+  if (runs.length === 0) {
+    return (
+      <div className="font-mono p-4 border border-dashed border-rule rounded text-sm text-ink-soft">
+        no runs yet — kick one off and it'll show up here.
+      </div>
+    )
+  }
+  return (
+    <div className="border border-rule/50 rounded overflow-hidden">
+      <div className="font-mono runs-header grid grid-cols-[2fr_0.8fr_0.8fr_0.8fr_1fr_0.8fr] gap-3 px-3 py-2 text-xs text-ink-soft uppercase tracking-[0.05em] font-semibold bg-paper-deep/60 border-b border-rule/50">
+        <span>run</span>
+        <span>reward</span>
+        <span>accuracy</span>
+        <span>status</span>
+        <span>agent</span>
+        <span className="text-right">duration</span>
+      </div>
+      {runs.map((r, i) => (
+        <RunRow key={r.runId} slug={slug} run={r} target={target} isLast={i === runs.length - 1} />
+      ))}
+    </div>
+  )
+}
+
+function RunRow({
+  slug,
+  run,
+  target,
+  isLast,
+}: {
+  slug: string
+  run: RunSummary
+  target: number
+  isLast: boolean
+}) {
+  const accuracyHitsTarget = run.measuredAccuracy != null && run.measuredAccuracy >= target
+  return (
+    <Link
+      to="/tasks/$slug/runs/$runId"
+      params={{ slug, runId: run.runId }}
+      className={`font-mono grid grid-cols-[2fr_0.8fr_0.8fr_0.8fr_1fr_0.8fr] gap-3 p-3 text-sm text-ink no-underline items-baseline ${
+        isLast ? '' : 'border-b border-rule/30'
+      }`}
+    >
+      <span className="text-ink font-medium">{run.runId}</span>
+      <span className="text-ink">{fmtReward(run.reward)}</span>
+      <span className={accuracyHitsTarget ? 'text-accent font-semibold' : 'text-ink'}>
+        {run.measuredAccuracy != null ? `${run.measuredAccuracy.toFixed(1)}%` : '—'}
+      </span>
+      <span>
+        <StatusPill status={run.status} />
+      </span>
+      <span className="muted text-xs">{run.agent.model}</span>
+      <span className="muted text-xs text-right">
+        {run.durationSec != null ? formatDuration(run.durationSec) : '—'}
+      </span>
+    </Link>
+  )
+}
+
+function StatusPill({ status }: { status: RunSummary['status'] }) {
+  const colorMap: Record<RunSummary['status'], { fg: string; bg: string }> = {
+    ok: { fg: '#065f46', bg: '#d1fae5' },
+    patched: { fg: '#92400e', bg: '#fef3c7' },
+    crashed: { fg: '#991b1b', bg: '#fee2e2' },
+    unknown: { fg: 'var(--color-ink-soft)', bg: 'transparent' },
+  }
+  const c = colorMap[status]
+  return (
+    <span
+      className="inline-block px-2 text-xs font-semibold uppercase tracking-[0.05em] rounded-[2px]"
+      style={{ background: c.bg, color: c.fg }}
+    >
+      {status}
+    </span>
   )
 }
 
@@ -272,7 +922,9 @@ function DownloadButton({ slug }: { slug: string }) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-label="download"
           >
+            <title>download</title>
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
