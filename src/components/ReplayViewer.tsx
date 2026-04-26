@@ -10,24 +10,22 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  type AnyBlock,
+  BASH_NAMES,
+  type Block,
   buildFileTimeline,
+  EDIT_NAMES,
   type FileChange,
   type FileTimeline,
-} from '#/lib/file-state'
-import { fmtCost, fmtMs } from '#/lib/formatters'
-import {
-  BASH_NAMES,
-  EDIT_NAMES,
   FS_NAMES,
+  parseAgentTrace,
   READ_NAMES,
   SEARCH_NAMES,
-  stripAnsi,
   TASK_NAMES,
   toolFilePath,
   WEB_NAMES,
   WRITE_NAMES,
-} from '#/lib/tool-names'
+} from '#/lib/agent-trace'
+import { fmtCost, fmtMs } from '#/lib/formatters'
 
 type EntryKind =
   | 'thinking'
@@ -52,7 +50,7 @@ interface TimelineEntry {
   exitCode?: number
   isError?: boolean
   fileChange?: FileChange
-  block: AnyBlock
+  block: Block
 }
 
 function trunc(s: string, n: number): string {
@@ -63,118 +61,19 @@ function base(p: string): string {
   return p.split('/').pop() ?? p
 }
 
-const MAX_PARSE_BYTES = 5 * 1024 * 1024
-
 type ParseResult =
-  | { kind: 'ok'; blocks: AnyBlock[]; entries: TimelineEntry[] }
+  | { kind: 'ok'; blocks: Block[]; entries: TimelineEntry[] }
   | { kind: 'too-large'; bytes: number }
   | { kind: 'not-stream' }
 
 function parseAll(raw: string): ParseResult {
-  if (raw.length > MAX_PARSE_BYTES) return { kind: 'too-large', bytes: raw.length }
-  const blocks: AnyBlock[] = []
-  const pending = new Map<string, number>()
-  let hits = 0
-  let total = 0
-
-  for (const line of raw.split('\n')) {
-    const t = line.trim()
-    if (!t) continue
-    total++
-    // biome-ignore lint/suspicious/noExplicitAny: jsonl
-    let ev: any
-    try {
-      ev = JSON.parse(t)
-      if (!ev || typeof ev !== 'object' || !('type' in ev)) continue
-      hits++
-    } catch {
-      continue
-    }
-
-    if (ev.type === 'system' && ev.subtype === 'init') {
-      blocks.push({
-        kind: 'system',
-        model: ev.model ?? '',
-        cwd: ev.cwd ?? '',
-        tools: Array.isArray(ev.tools)
-          ? ev.tools.map((x: { name?: string } | string) =>
-              typeof x === 'string' ? x : (x.name ?? '?'),
-            )
-          : [],
-      })
-      continue
-    }
-    if (ev.type === 'result') {
-      blocks.push({
-        kind: 'result',
-        numTurns: ev.num_turns,
-        costUsd: ev.cost_usd,
-        durationMs: ev.duration_ms,
-        isError: !!ev.is_error,
-        content: typeof ev.result === 'string' ? ev.result : undefined,
-      })
-      continue
-    }
-    const msg = ev.message
-    if (!msg) continue
-    const content = msg.content
-    if (ev.type === 'assistant' && Array.isArray(content)) {
-      for (const blk of content) {
-        if (blk.type === 'thinking' || blk.type === 'reasoning' || blk.type === 'analysis') {
-          const txt = blk.thinking ?? blk.text ?? ''
-          if (txt.trim()) blocks.push({ kind: 'thinking', content: txt })
-          continue
-        }
-        if (blk.type === 'text' && blk.text?.trim()) {
-          blocks.push({ kind: 'text', content: blk.text })
-          continue
-        }
-        if (blk.type === 'tool_use') {
-          const i = blocks.length
-          blocks.push({
-            kind: 'tool',
-            toolName: blk.name ?? 'unknown',
-            callId: blk.id ?? '',
-            args: blk.input ?? {},
-          })
-          if (blk.id) pending.set(blk.id, i)
-        }
-      }
-      continue
-    }
-    if (ev.type === 'user' && Array.isArray(content)) {
-      for (const blk of content) {
-        if (blk.type !== 'tool_result') continue
-        const callId: string = blk.tool_use_id ?? ''
-        let rc = ''
-        if (typeof blk.content === 'string') rc = blk.content
-        else if (Array.isArray(blk.content))
-          rc = blk.content
-            .map((c: { text?: string } | string) =>
-              typeof c === 'string' ? c : (c.text ?? JSON.stringify(c)),
-            )
-            .join('\n')
-        const tur = ev.toolUseResult ?? ev.tool_use_result
-        let exitCode: number | undefined
-        if (tur && typeof tur === 'object') {
-          if (tur.stdout && !rc) rc = tur.stdout
-          if (tur.stderr) rc += `${rc ? '\n' : ''}${tur.stderr}`
-          exitCode = tur.exitCode ?? tur.exit_code
-        }
-        const ti = callId ? pending.get(callId) : undefined
-        if (ti !== undefined) {
-          ;(blocks[ti] as AnyBlock).result = {
-            content: stripAnsi(rc),
-            isError: !!blk.is_error,
-            exitCode,
-          }
-          pending.delete(callId)
-        }
-      }
-    }
+  const result = parseAgentTrace(raw)
+  if (!result.ok) {
+    return result.reason === 'too-large'
+      ? { kind: 'too-large', bytes: result.bytes }
+      : { kind: 'not-stream' }
   }
-
-  if (hits < 2 || (total > 0 && hits / total < 0.25)) return { kind: 'not-stream' }
+  const blocks = result.blocks.filter((b) => b.kind !== 'raw')
   const entries: TimelineEntry[] = []
   for (let i = 0; i < blocks.length; i++) {
     const e = mkEntry(i, blocks[i]!)
@@ -183,24 +82,22 @@ function parseAll(raw: string): ParseResult {
   return { kind: 'ok', blocks, entries }
 }
 
-function mkEntry(idx: number, b: AnyBlock): TimelineEntry | null {
+function mkEntry(idx: number, b: Block): TimelineEntry | null {
   if (b.kind === 'thinking')
-    return { idx, kind: 'thinking', label: trunc(String(b.content ?? ''), 80), block: b }
-  if (b.kind === 'text')
-    return { idx, kind: 'text', label: trunc(String(b.content ?? ''), 80), block: b }
-  if (b.kind === 'system')
-    return { idx, kind: 'system', label: String(b.model ?? 'session'), block: b }
+    return { idx, kind: 'thinking', label: trunc(b.content, 80), block: b }
+  if (b.kind === 'text') return { idx, kind: 'text', label: trunc(b.content, 80), block: b }
+  if (b.kind === 'system') return { idx, kind: 'system', label: b.model || 'session', block: b }
   if (b.kind === 'result')
     return {
       idx,
       kind: 'result',
       label: b.isError ? 'Failed' : 'Completed',
-      isError: !!b.isError,
+      isError: b.isError,
       block: b,
     }
   if (b.kind !== 'tool') return null
-  const name = String(b.toolName ?? '').toLowerCase()
-  const args = (b.args ?? {}) as Record<string, unknown>
+  const name = b.toolName.toLowerCase()
+  const args = b.args
   const path = toolFilePath(args)
   const ec = b.result?.exitCode
   if (BASH_NAMES.has(name))
@@ -608,9 +505,9 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
   if (change) return <DiffPane change={change} />
 
   if (entry.kind === 'bash') {
-    const args = (entry.block.args ?? {}) as Record<string, unknown>
-    const cmd = String(args.command ?? args.cmd ?? '')
-    const output = entry.block.result?.content ?? ''
+    const b = entry.block as Extract<Block, { kind: 'tool' }>
+    const cmd = String(b.args.command ?? b.args.cmd ?? '')
+    const output = b.result?.content ?? ''
     const bad = entry.exitCode !== undefined && entry.exitCode !== 0
     return (
       <div style={{ padding: '1rem', height: '100%', display: 'flex', alignItems: 'flex-start' }}>
@@ -693,7 +590,8 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
   }
 
   if (entry.kind === 'result') {
-    const bad = !!entry.block.isError
+    const b = entry.block as Extract<Block, { kind: 'result' }>
+    const bad = b.isError
     return (
       <div
         style={{
@@ -723,7 +621,7 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
               fontSize: 'var(--fs-sm)',
             }}
           >
-            {entry.block.numTurns != null && (
+            {b.numTurns != null && (
               <div>
                 <div
                   style={{
@@ -734,10 +632,10 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
                 >
                   Turns
                 </div>
-                <span className="font-mono">{String(entry.block.numTurns)}</span>
+                <span className="font-mono">{String(b.numTurns)}</span>
               </div>
             )}
-            {entry.block.costUsd != null && (
+            {b.costUsd != null && (
               <div>
                 <div
                   style={{
@@ -748,10 +646,10 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
                 >
                   Cost
                 </div>
-                <span className="font-mono">{fmtCost(Number(entry.block.costUsd))}</span>
+                <span className="font-mono">{fmtCost(Number(b.costUsd))}</span>
               </div>
             )}
-            {entry.block.durationMs != null && (
+            {b.durationMs != null && (
               <div>
                 <div
                   style={{
@@ -762,7 +660,7 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
                 >
                   Duration
                 </div>
-                <span className="font-mono">{fmtMs(Number(entry.block.durationMs))}</span>
+                <span className="font-mono">{fmtMs(Number(b.durationMs))}</span>
               </div>
             )}
           </div>
@@ -786,9 +684,9 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
           <span style={{ fontSize: 'var(--fs-md)', fontWeight: 600, color: 'var(--ink-soft)' }}>
             ⚙ Session started
           </span>
-          {entry.block.model ? (
+          {(entry.block as Extract<Block, { kind: 'system' }>).model ? (
             <p className="font-mono" style={{ fontSize: 'var(--fs-sm)', marginTop: '0.5rem' }}>
-              {String(entry.block.model)}
+              {(entry.block as Extract<Block, { kind: 'system' }>).model}
             </p>
           ) : null}
         </div>
@@ -797,6 +695,7 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
   }
 
   if (entry.kind === 'text' || entry.kind === 'thinking') {
+    const b = entry.block as Extract<Block, { kind: 'text' | 'thinking' }>
     const isThinking = entry.kind === 'thinking'
     return (
       <div
@@ -848,7 +747,7 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
               padding: 0,
             }}
           >
-            {String(entry.block.content ?? '')}
+            {b.content}
           </pre>
         </div>
       </div>
@@ -881,9 +780,9 @@ function TermPanel({
   onToggle: () => void
 }) {
   if (!entry) return null
-  const args = (entry.block.args ?? {}) as Record<string, unknown>
-  const cmd = String(args.command ?? args.cmd ?? '')
-  const output = entry.block.result?.content ?? ''
+  const b = entry.block as Extract<Block, { kind: 'tool' }>
+  const cmd = String(b.args.command ?? b.args.cmd ?? '')
+  const output = b.result?.content ?? ''
   const bad = entry.exitCode !== undefined && entry.exitCode !== 0
 
   return (
@@ -1031,10 +930,14 @@ export function ReplayViewer({ content }: { content: string }) {
   }
   const thinkingText = useMemo((): string | null => {
     if (!entry) return null
-    if (entry.kind === 'thinking' || entry.kind === 'text') return String(entry.block.content ?? '')
+    if (entry.kind === 'thinking' || entry.kind === 'text') {
+      return (entry.block as Extract<Block, { kind: 'text' | 'thinking' }>).content
+    }
     if (safe > 0) {
       const prev = entries[safe - 1]!
-      if (prev.kind === 'thinking') return String(prev.block.content ?? '')
+      if (prev.kind === 'thinking') {
+        return (prev.block as Extract<Block, { kind: 'thinking' }>).content
+      }
     }
     return null
   }, [entry, entries, safe])

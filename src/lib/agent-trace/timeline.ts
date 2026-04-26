@@ -1,26 +1,5 @@
-const WRITE = new Set(['write', 'writefile', 'create', 'save', 'writetool'])
-
-const EDIT = new Set([
-  'edit',
-  'editfile',
-  'str_replace_editor',
-  'multiedit',
-  'edittool',
-  'multiedittool',
-  'str_replace_based_edit_tool',
-  'replacetool',
-])
-
-const READ = new Set(['read', 'readfile', 'view', 'cat', 'readtool'])
-
-export interface AnyBlock {
-  kind: string
-  toolName?: string
-  callId?: string
-  args?: Record<string, unknown>
-  result?: { content: string; isError: boolean; exitCode?: number }
-  [key: string]: unknown
-}
+import type { Block } from './blocks'
+import { EDIT_NAMES, READ_NAMES, WRITE_NAMES } from './tool-names'
 
 export type FileChangeKind = 'create' | 'edit' | 'read'
 
@@ -77,21 +56,21 @@ function applyReplace(content: string, oldStr: string, newStr: string): string {
   return content.slice(0, idx) + newStr + content.slice(idx + oldStr.length)
 }
 
-export function buildFileTimeline(blocks: readonly AnyBlock[]): FileTimeline {
+export function buildFileTimeline(blocks: readonly Block[]): FileTimeline {
   const files = new Map<string, string>()
   const changes: FileChange[] = []
   const pathSet = new Set<string>()
 
   for (const [i, block] of blocks.entries()) {
-    if (block.kind !== 'tool' || !block.args) continue
-    const name = (block.toolName ?? '').toLowerCase()
+    if (block.kind !== 'tool') continue
+    const name = block.toolName.toLowerCase()
     const args = block.args
     const fp = getFilePath(args)
     if (!fp) continue
 
-    const isWrite = WRITE.has(name)
-    const isEdit = EDIT.has(name)
-    const isRead = READ.has(name)
+    const isWrite = WRITE_NAMES.has(name)
+    const isEdit = EDIT_NAMES.has(name)
+    const isRead = READ_NAMES.has(name)
     if (!isWrite && !isEdit && !isRead) continue
 
     pathSet.add(fp)
@@ -163,8 +142,8 @@ export function buildFileTimeline(blocks: readonly AnyBlock[]): FileTimeline {
 
 export function contentAt(timeline: FileTimeline, path: string, blockIndex: number): string | null {
   for (let i = timeline.changes.length - 1; i >= 0; i--) {
-    const c = timeline.changes[i]!
-    if (c.path === path && c.blockIndex <= blockIndex) return c.newContent
+    const c = timeline.changes[i]
+    if (c && c.path === path && c.blockIndex <= blockIndex) return c.newContent
   }
   return null
 }
