@@ -7,7 +7,8 @@ import RouteErrorPanel from '#/components/RouteErrorPanel'
 import SectionHead from '#/components/SectionHead'
 import { SITE } from '#/lib/constants'
 import { fetchAllTaskFiles, fetchTaskDetail } from '#/lib/server-fns'
-import { type Claims, formatBytes, formatDuration, type TaskToml } from '#/lib/tasks'
+import { formatBytes, formatDuration } from '#/lib/formatters'
+import type { Claims, TaskToml } from '#/lib/tasks'
 
 type LoaderData = {
   slug: string

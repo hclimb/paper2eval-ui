@@ -3,7 +3,8 @@ import RouteErrorPanel from '#/components/RouteErrorPanel'
 import SectionHead from '#/components/SectionHead'
 import { SITE } from '#/lib/constants'
 import { fetchTaskList } from '#/lib/server-fns'
-import { formatBytes, formatDuration, type TaskSummary } from '#/lib/tasks'
+import { formatBytes, formatDuration } from '#/lib/formatters'
+import type { TaskSummary } from '#/lib/tasks'
 
 export const Route = createFileRoute('/')({
   head: () => ({

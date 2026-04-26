@@ -57,13 +57,6 @@ export type TaskSummary = {
   claims: Claims
 }
 
-export type FileNode = {
-  name: string
-  path: string
-  size: number
-  children?: FileNode[]
-}
-
 export function parseTaskToml(raw: string): TaskToml {
   return parseToml(raw) as unknown as TaskToml
 }
@@ -72,45 +65,3 @@ export function parseClaims(raw: string): Claims {
   return JSON.parse(raw) as Claims
 }
 
-export function buildFileTree(files: { key: string; size: number }[]): FileNode[] {
-  const root: FileNode[] = []
-
-  for (const f of files) {
-    const parts = f.key.split('/')
-    let current = root
-
-    for (let i = 0; i < parts.length; i++) {
-      const name = parts[i]
-      const isFile = i === parts.length - 1
-      const path = parts.slice(0, i + 1).join('/')
-
-      let existing = current.find((n) => n.name === name)
-      if (!existing) {
-        existing = { name, path, size: isFile ? f.size : 0 }
-        if (!isFile) existing.children = []
-        current.push(existing)
-      }
-      if (!isFile && existing.children) {
-        current = existing.children
-      }
-    }
-  }
-
-  return root
-}
-
-export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const val = bytes / 1024 ** i
-  return `${val < 10 ? val.toFixed(1) : Math.round(val)} ${units[i]}`
-}
-
-export function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m`
-  const h = Math.floor(seconds / 3600)
-  const m = Math.round((seconds % 3600) / 60)
-  return m > 0 ? `${h}h ${m}m` : `${h}h`
-}
