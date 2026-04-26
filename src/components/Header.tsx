@@ -36,12 +36,20 @@ export default function Header() {
           <BrandMark />
           <span>paper2eval</span>
         </Link>
+        <span className="font-mono text-xs text-ink-soft">
+          by{' '}
+          <a
+            href="https://hillclimb.com"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-ink-soft hover:text-accent no-underline hover:underline"
+          >
+            hillclimb
+          </a>
+        </span>
         <nav className="nav-links" aria-label="Primary">
           <Link to="/" className="nav-link" activeProps={{ className: 'active' }}>
             tasks
-          </Link>
-          <Link to="/runs/beat-math500" className="nav-link" activeProps={{ className: 'active' }}>
-            runs
           </Link>
           <Link to="/docs" className="nav-link" activeProps={{ className: 'active' }}>
             docs

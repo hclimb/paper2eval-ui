@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TasksSlugRouteImport } from './routes/tasks/$slug'
-import { Route as RunsBeatMath500RouteImport } from './routes/runs/beat-math500'
 import { Route as TasksSlugIndexRouteImport } from './routes/tasks/$slug/index'
 import { Route as TasksSlugFilesSplatRouteImport } from './routes/tasks/$slug/files/$'
 
@@ -31,11 +30,6 @@ const TasksSlugRoute = TasksSlugRouteImport.update({
   path: '/tasks/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RunsBeatMath500Route = RunsBeatMath500RouteImport.update({
-  id: '/runs/beat-math500',
-  path: '/runs/beat-math500',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TasksSlugIndexRoute = TasksSlugIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -50,7 +44,6 @@ const TasksSlugFilesSplatRoute = TasksSlugFilesSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
-  '/runs/beat-math500': typeof RunsBeatMath500Route
   '/tasks/$slug': typeof TasksSlugRouteWithChildren
   '/tasks/$slug/': typeof TasksSlugIndexRoute
   '/tasks/$slug/files/$': typeof TasksSlugFilesSplatRoute
@@ -58,7 +51,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
-  '/runs/beat-math500': typeof RunsBeatMath500Route
   '/tasks/$slug': typeof TasksSlugIndexRoute
   '/tasks/$slug/files/$': typeof TasksSlugFilesSplatRoute
 }
@@ -66,7 +58,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/docs': typeof DocsRoute
-  '/runs/beat-math500': typeof RunsBeatMath500Route
   '/tasks/$slug': typeof TasksSlugRouteWithChildren
   '/tasks/$slug/': typeof TasksSlugIndexRoute
   '/tasks/$slug/files/$': typeof TasksSlugFilesSplatRoute
@@ -76,22 +67,15 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/docs'
-    | '/runs/beat-math500'
     | '/tasks/$slug'
     | '/tasks/$slug/'
     | '/tasks/$slug/files/$'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/docs'
-    | '/runs/beat-math500'
-    | '/tasks/$slug'
-    | '/tasks/$slug/files/$'
+  to: '/' | '/docs' | '/tasks/$slug' | '/tasks/$slug/files/$'
   id:
     | '__root__'
     | '/'
     | '/docs'
-    | '/runs/beat-math500'
     | '/tasks/$slug'
     | '/tasks/$slug/'
     | '/tasks/$slug/files/$'
@@ -100,7 +84,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocsRoute: typeof DocsRoute
-  RunsBeatMath500Route: typeof RunsBeatMath500Route
   TasksSlugRoute: typeof TasksSlugRouteWithChildren
 }
 
@@ -125,13 +108,6 @@ declare module '@tanstack/react-router' {
       path: '/tasks/$slug'
       fullPath: '/tasks/$slug'
       preLoaderRoute: typeof TasksSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/runs/beat-math500': {
-      id: '/runs/beat-math500'
-      path: '/runs/beat-math500'
-      fullPath: '/runs/beat-math500'
-      preLoaderRoute: typeof RunsBeatMath500RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks/$slug/': {
@@ -168,7 +144,6 @@ const TasksSlugRouteWithChildren = TasksSlugRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRoute: DocsRoute,
-  RunsBeatMath500Route: RunsBeatMath500Route,
   TasksSlugRoute: TasksSlugRouteWithChildren,
 }
 export const routeTree = rootRouteImport
