@@ -297,16 +297,33 @@ export const fetchRunList = createServerFn({ method: 'GET' })
     return summaries.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))
   })
 
-const TRACE_KEY = 'runs/{slug}/agent_logs/claude-code.txt'
-
-async function loadAgentTrace(slug: string): Promise<string | null> {
-  return getS3File(TRACE_KEY.replace('{slug}', slug))
+/**
+ * Agent trace lookup.
+ *
+ * Canonical (new uploads): tasks/{slug}/_runs/{runId}/{trialId}/agent/*.txt
+ *   — per-run, per-trial, agent-name agnostic (claude-code, codex, aider…)
+ * Legacy (only beat-math500 has this): runs/{slug}/agent_logs/claude-code.txt
+ *   — flat, slug-only, no runId. Survives until that task is re-uploaded
+ *   under the new layout.
+ */
+async function loadAgentTrace(slug: string, runId: string): Promise<string | null> {
+  const trialIds = await listTrialDirs(slug, runId)
+  for (const trialId of trialIds) {
+    const agentPrefix = `tasks/${slug}/_runs/${runId}/${trialId}/agent/`
+    const files = await listS3Prefix(agentPrefix)
+    const trace = files.find((f) => f.key.endsWith('.txt'))
+    if (trace) {
+      const content = await getS3File(`${agentPrefix}${trace.key}`)
+      if (content) return content
+    }
+  }
+  return getS3File(`runs/${slug}/agent_logs/claude-code.txt`)
 }
 
 export const fetchAgentTrace = createServerFn({ method: 'GET' })
   .inputValidator((d: { slug: string; runId: string }) => d)
   .handler(async ({ data }): Promise<{ content: string | null }> => {
-    const content = await loadAgentTrace(data.slug)
+    const content = await loadAgentTrace(data.slug, data.runId)
     return { content }
   })
 
