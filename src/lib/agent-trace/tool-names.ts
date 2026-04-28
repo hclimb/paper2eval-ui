@@ -1,34 +1,13 @@
-export const BASH_NAMES = new Set([
-  'bash',
-  'bashtool',
-  'execute',
-  'shell',
-  'terminal',
-  'run_command',
-])
+// Real tool names emitted by claude-code. Audited against production traces;
+// older speculative aliases (str_replace_editor, bashtool, fetch, glob, etc.)
+// were never observed and have been removed.
 
-export const READ_NAMES = new Set(['read', 'readfile', 'view', 'cat', 'readtool'])
-
-export const WRITE_NAMES = new Set(['write', 'writefile', 'create', 'save', 'writetool'])
-
-export const EDIT_NAMES = new Set([
-  'edit',
-  'editfile',
-  'str_replace_editor',
-  'multiedit',
-  'edittool',
-  'multiedittool',
-  'str_replace_based_edit_tool',
-  'replacetool',
-])
-
-export const SEARCH_NAMES = new Set(['grep', 'search', 'ripgrep', 'greptool'])
-
-export const FS_NAMES = new Set(['glob', 'globtool', 'find', 'ls', 'listfiles', 'list', 'lstool'])
-
-export const TASK_NAMES = new Set(['task', 'dispatch', 'subagent', 'tasktool', 'agent'])
-
-export const WEB_NAMES = new Set(['webfetch', 'fetch', 'browse', 'webtool'])
+export const BASH = 'Bash'
+export const READ = 'Read'
+export const WRITE = 'Write'
+export const EDIT = 'Edit'
+export const TODO_WRITE = 'TodoWrite'
+export const TOOL_SEARCH = 'ToolSearch'
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI CSI sequences are control characters by definition
 const ANSI_RE = /\x1B\[[0-9;]*[A-Za-z]/g
@@ -38,17 +17,23 @@ export function stripAnsi(t: string): string {
 }
 
 export function toolFilePath(args: Record<string, unknown>): string {
-  return String(args.file_path ?? args.path ?? args.filename ?? '').trim()
+  return typeof args.file_path === 'string' ? args.file_path : ''
 }
 
 export function toolIcon(name: string): string {
-  const n = name.toLowerCase()
-  if (BASH_NAMES.has(n)) return '▶'
-  if (READ_NAMES.has(n)) return '📄'
-  if (WRITE_NAMES.has(n) || EDIT_NAMES.has(n)) return '✏️'
-  if (SEARCH_NAMES.has(n)) return '🔍'
-  if (FS_NAMES.has(n)) return '📁'
-  if (TASK_NAMES.has(n)) return '🔄'
-  if (WEB_NAMES.has(n)) return '🌐'
-  return '🔧'
+  switch (name) {
+    case BASH:
+      return '▶'
+    case READ:
+      return '📄'
+    case WRITE:
+    case EDIT:
+      return '✏️'
+    case TODO_WRITE:
+      return '📋'
+    case TOOL_SEARCH:
+      return '🔍'
+    default:
+      return '🔧'
+  }
 }

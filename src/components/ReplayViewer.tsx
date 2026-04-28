@@ -10,36 +10,38 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  BASH_NAMES,
+  BASH,
   type Block,
   buildFileTimeline,
-  EDIT_NAMES,
+  EDIT,
   type FileChange,
   type FileTimeline,
-  FS_NAMES,
   parseAgentTrace,
-  READ_NAMES,
-  SEARCH_NAMES,
-  TASK_NAMES,
+  READ,
+  TODO_WRITE,
+  TOOL_SEARCH,
+  type TraceMeta,
   toolFilePath,
-  WEB_NAMES,
-  WRITE_NAMES,
+  WRITE,
 } from '#/lib/agent-trace'
 import { fmtCost, fmtMs } from '#/lib/formatters'
 
 type EntryKind =
   | 'thinking'
+  | 'redacted_thinking'
   | 'text'
   | 'bash'
   | 'read'
   | 'write'
   | 'edit'
-  | 'search'
-  | 'fs'
-  | 'web'
-  | 'task'
+  | 'todo'
+  | 'toolsearch'
   | 'tool'
   | 'system'
+  | 'note'
+  | 'compact_boundary'
+  | 'task_event'
+  | 'api_retry'
   | 'result'
 
 interface TimelineEntry {
@@ -47,7 +49,6 @@ interface TimelineEntry {
   kind: EntryKind
   label: string
   filePath?: string
-  exitCode?: number
   isError?: boolean
   fileChange?: FileChange
   block: Block
@@ -62,7 +63,7 @@ function base(p: string): string {
 }
 
 type ParseResult =
-  | { kind: 'ok'; blocks: Block[]; entries: TimelineEntry[] }
+  | { kind: 'ok'; blocks: Block[]; entries: TimelineEntry[]; meta: TraceMeta }
   | { kind: 'too-large'; bytes: number }
   | { kind: 'not-stream' }
 
@@ -73,80 +74,87 @@ function parseAll(raw: string): ParseResult {
       ? { kind: 'too-large', bytes: result.bytes }
       : { kind: 'not-stream' }
   }
-  const blocks = result.blocks.filter((b) => b.kind !== 'raw')
   const entries: TimelineEntry[] = []
-  for (let i = 0; i < blocks.length; i++) {
-    const e = mkEntry(i, blocks[i]!)
+  for (let i = 0; i < result.blocks.length; i++) {
+    const block = result.blocks[i]
+    if (!block) continue
+    const e = mkEntry(i, block)
     if (e) entries.push(e)
   }
-  return { kind: 'ok', blocks, entries }
+  return { kind: 'ok', blocks: result.blocks, entries, meta: result.meta }
 }
 
 function mkEntry(idx: number, b: Block): TimelineEntry | null {
-  if (b.kind === 'thinking')
-    return { idx, kind: 'thinking', label: trunc(b.content, 80), block: b }
-  if (b.kind === 'text') return { idx, kind: 'text', label: trunc(b.content, 80), block: b }
-  if (b.kind === 'system') return { idx, kind: 'system', label: b.model || 'session', block: b }
-  if (b.kind === 'result')
-    return {
-      idx,
-      kind: 'result',
-      label: b.isError ? 'Failed' : 'Completed',
-      isError: b.isError,
-      block: b,
+  switch (b.kind) {
+    case 'thinking':
+      return { idx, kind: 'thinking', label: trunc(b.content, 80), block: b }
+    case 'redacted_thinking':
+      return { idx, kind: 'redacted_thinking', label: 'redacted thinking', block: b }
+    case 'text':
+      return { idx, kind: 'text', label: trunc(b.content, 80), block: b }
+    case 'system':
+      return { idx, kind: 'system', label: b.model || 'session', block: b }
+    case 'note':
+      return { idx, kind: 'note', label: trunc(b.content, 80), block: b }
+    case 'compact_boundary':
+      return {
+        idx,
+        kind: 'compact_boundary',
+        label: `compact ${b.preTokens.toLocaleString()} → ${b.postTokens.toLocaleString()}`,
+        block: b,
+      }
+    case 'task_event':
+      return { idx, kind: 'task_event', label: `task ${b.subtype}`, block: b }
+    case 'api_retry':
+      return {
+        idx,
+        kind: 'api_retry',
+        label: `retry ${b.attempt}/${b.maxRetries}`,
+        block: b,
+      }
+    case 'result':
+      return {
+        idx,
+        kind: 'result',
+        label: b.isError ? 'Failed' : 'Completed',
+        isError: b.isError,
+        block: b,
+      }
+    case 'tool': {
+      const args = b.args
+      const path = toolFilePath(args)
+      const isError = b.result?.kind === 'bash' && b.result.data.isError
+      switch (b.toolName) {
+        case BASH:
+          return {
+            idx,
+            kind: 'bash',
+            label: trunc(String(args.command ?? ''), 60) || 'shell',
+            isError,
+            block: b,
+          }
+        case READ:
+          return { idx, kind: 'read', label: path || 'read', filePath: path, block: b }
+        case WRITE:
+          return { idx, kind: 'write', label: path || 'write', filePath: path, block: b }
+        case EDIT:
+          return { idx, kind: 'edit', label: path || 'edit', filePath: path, block: b }
+        case TODO_WRITE:
+          return { idx, kind: 'todo', label: 'todo update', block: b }
+        case TOOL_SEARCH:
+          return {
+            idx,
+            kind: 'toolsearch',
+            label: trunc(String(args.query ?? 'search'), 60),
+            block: b,
+          }
+        default:
+          return { idx, kind: 'tool', label: b.toolName, block: b }
+      }
     }
-  if (b.kind !== 'tool') return null
-  const name = b.toolName.toLowerCase()
-  const args = b.args
-  const path = toolFilePath(args)
-  const ec = b.result?.exitCode
-  if (BASH_NAMES.has(name))
-    return {
-      idx,
-      kind: 'bash',
-      label: trunc(String(args.command ?? args.cmd ?? ''), 60) || 'shell',
-      exitCode: ec,
-      isError: b.result?.isError,
-      block: b,
-    }
-  if (READ_NAMES.has(name))
-    return { idx, kind: 'read', label: path || 'read', filePath: path, block: b }
-  if (WRITE_NAMES.has(name))
-    return { idx, kind: 'write', label: path || 'write', filePath: path, block: b }
-  if (EDIT_NAMES.has(name)) {
-    const isCreate = args.file_text != null && !args.old_string && !args.old_str && !args.edits
-    return {
-      idx,
-      kind: isCreate ? 'write' : 'edit',
-      label: path || 'edit',
-      filePath: path,
-      block: b,
-    }
+    default:
+      return null
   }
-  if (SEARCH_NAMES.has(name))
-    return {
-      idx,
-      kind: 'search',
-      label: trunc(String(args.pattern ?? args.regex ?? args.query ?? ''), 50) || 'search',
-      block: b,
-    }
-  if (FS_NAMES.has(name))
-    return {
-      idx,
-      kind: 'fs',
-      label: trunc(String(args.pattern ?? args.glob ?? args.path ?? '.'), 50),
-      block: b,
-    }
-  if (TASK_NAMES.has(name))
-    return {
-      idx,
-      kind: 'task',
-      label: trunc(String(args.description ?? args.prompt ?? 'subagent'), 60),
-      block: b,
-    }
-  if (WEB_NAMES.has(name))
-    return { idx, kind: 'web', label: trunc(String(args.url ?? 'web'), 60), block: b }
-  return { idx, kind: 'tool', label: String(b.toolName ?? 'tool'), block: b }
 }
 
 function linkChanges(entries: TimelineEntry[], tl: FileTimeline): void {
@@ -174,7 +182,7 @@ const TRACK_COLORS: Record<string, string> = {
 }
 
 function trackColor(e: TimelineEntry): string {
-  if (e.kind === 'bash' && e.exitCode !== undefined && e.exitCode !== 0) return '#a53030'
+  if (e.kind === 'bash' && e.isError) return '#a53030'
   return TRACK_COLORS[e.kind] ?? '#b8ac9a'
 }
 
@@ -264,7 +272,7 @@ function Scrubber({
           height: '10px',
           borderRadius: '50%',
           background: 'var(--paper)',
-          boxShadow: '0 0 0 2px var(--ink)',
+          border: '2px solid var(--ink)',
           pointerEvents: 'none',
         }}
       />
@@ -420,7 +428,6 @@ function ThinkingOverlay({ text, onClose }: { text: string; onClose: () => void 
           border: '1px solid #c4b5fd80',
           background: 'color-mix(in oklab, var(--paper) 95%, #8b5cf620)',
           backdropFilter: 'blur(8px)',
-          boxShadow: '0 4px 16px rgba(20,20,16,0.15)',
         }}
       >
         <div
@@ -506,9 +513,10 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
 
   if (entry.kind === 'bash') {
     const b = entry.block as Extract<Block, { kind: 'tool' }>
-    const cmd = String(b.args.command ?? b.args.cmd ?? '')
-    const output = b.result?.content ?? ''
-    const bad = entry.exitCode !== undefined && entry.exitCode !== 0
+    const cmd = String(b.args.command ?? '')
+    const r = b.result?.kind === 'bash' ? b.result.data : null
+    const output = r ? [r.stdout, r.stderr].filter(Boolean).join('\n').trim() : ''
+    const bad = !!r && (r.isError || r.interrupted)
     return (
       <div style={{ padding: '1rem', height: '100%', display: 'flex', alignItems: 'flex-start' }}>
         <div
@@ -547,7 +555,7 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
               <span style={{ color: '#555', userSelect: 'none' }}>$ </span>
               {cmd}
             </pre>
-            {entry.exitCode !== undefined && (
+            {bad && (
               <span
                 style={{
                   fontSize: 'var(--fs-xs)',
@@ -555,12 +563,28 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
                   padding: '0.1rem 0.4rem',
                   borderRadius: '3px',
                   flexShrink: 0,
-                  background: bad ? '#991b1b' : 'transparent',
-                  color: bad ? '#fca5a5' : '#4ade80',
-                  border: `1px solid ${bad ? '#991b1b' : '#065f46'}`,
+                  background: '#991b1b',
+                  color: '#fca5a5',
+                  border: '1px solid #991b1b',
                 }}
               >
-                exit {entry.exitCode}
+                {r?.interrupted ? 'interrupted' : 'failed'}
+              </span>
+            )}
+            {!bad && r && !r.isError && (
+              <span
+                style={{
+                  fontSize: 'var(--fs-xs)',
+                  fontFamily: 'var(--font-mono)',
+                  padding: '0.1rem 0.4rem',
+                  borderRadius: '3px',
+                  flexShrink: 0,
+                  background: 'transparent',
+                  color: '#4ade80',
+                  border: '1px solid #065f46',
+                }}
+              >
+                ok
               </span>
             )}
           </div>
@@ -635,7 +659,7 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
                 <span className="font-mono">{String(b.numTurns)}</span>
               </div>
             )}
-            {b.costUsd != null && (
+            {b.totalCostUsd != null && (
               <div>
                 <div
                   style={{
@@ -646,7 +670,7 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
                 >
                   Cost
                 </div>
-                <span className="font-mono">{fmtCost(Number(b.costUsd))}</span>
+                <span className="font-mono">{fmtCost(b.totalCostUsd)}</span>
               </div>
             )}
             {b.durationMs != null && (
@@ -754,6 +778,272 @@ function CenterContent({ change, entry }: { change: FileChange | null; entry: Ti
     )
   }
 
+  if (entry.kind === 'note') {
+    const b = entry.block as Extract<Block, { kind: 'note' }>
+    const label = b.source.replace(/-/g, ' ')
+    return (
+      <div style={{ padding: '1.5rem', overflowY: 'auto', height: '100%' }}>
+        <div
+          style={{
+            maxWidth: '52rem',
+            margin: '0 auto',
+            border: '1px solid var(--rule)',
+            borderRadius: '6px',
+            background: 'var(--paper-deep)',
+            padding: '1.25rem 1.5rem',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--fs-xs)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              color: 'var(--ink-soft)',
+              marginBottom: '0.75rem',
+            }}
+          >
+            {label}
+          </div>
+          <pre
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--fs-sm)',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.7,
+              margin: 0,
+              background: 'transparent',
+              border: 0,
+              padding: 0,
+            }}
+          >
+            {b.content}
+          </pre>
+        </div>
+      </div>
+    )
+  }
+
+  if (entry.kind === 'compact_boundary') {
+    const b = entry.block as Extract<Block, { kind: 'compact_boundary' }>
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          padding: '1.5rem',
+        }}
+      >
+        <div
+          style={{
+            border: '1px dashed var(--rule)',
+            borderRadius: '8px',
+            padding: '1.5rem 2rem',
+            textAlign: 'center',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          <div style={{ fontSize: 'var(--fs-md)', marginBottom: '0.75rem' }}>
+            ↯ context compacted
+          </div>
+          <div
+            style={{
+              fontSize: 'var(--fs-base)',
+              color: 'var(--ink)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {b.preTokens.toLocaleString()} → {b.postTokens.toLocaleString()} tokens
+          </div>
+          <div
+            style={{
+              fontSize: 'var(--fs-xs)',
+              color: 'var(--ink-soft)',
+              marginTop: '0.5rem',
+            }}
+          >
+            trigger: {b.trigger} · took {fmtMs(b.durationMs)}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (entry.kind === 'task_event') {
+    const b = entry.block as Extract<Block, { kind: 'task_event' }>
+    const detail =
+      b.subtype === 'started'
+        ? b.description
+        : b.subtype === 'notification'
+          ? (b.summary ?? b.status)
+          : b.status
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          padding: '1.5rem',
+        }}
+      >
+        <div
+          style={{
+            borderLeft: '3px solid #6366f1',
+            background: 'color-mix(in oklab, var(--paper-deep) 80%, #6366f110)',
+            padding: '1rem 1.5rem',
+            borderRadius: '0 6px 6px 0',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 'var(--fs-xs)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              color: '#6366f1',
+              marginBottom: '0.4rem',
+            }}
+          >
+            background task / {b.subtype}
+          </div>
+          {detail && <div style={{ fontSize: 'var(--fs-sm)' }}>{detail}</div>}
+          <div
+            style={{
+              fontSize: 'var(--fs-xs)',
+              color: 'var(--ink-soft)',
+              marginTop: '0.4rem',
+            }}
+          >
+            task: {b.taskId}
+            {b.toolUseId && ` · tool: ${b.toolUseId}`}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (entry.kind === 'api_retry') {
+    const b = entry.block as Extract<Block, { kind: 'api_retry' }>
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          padding: '1.5rem',
+        }}
+      >
+        <div
+          style={{
+            borderLeft: '3px solid #d97706',
+            background: 'color-mix(in oklab, var(--paper-deep) 80%, #d9770610)',
+            padding: '1rem 1.5rem',
+            borderRadius: '0 6px 6px 0',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 'var(--fs-xs)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              color: '#d97706',
+              marginBottom: '0.4rem',
+            }}
+          >
+            api retry · attempt {b.attempt} of {b.maxRetries}
+          </div>
+          <div style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-soft)' }}>
+            delay: {Math.round(b.retryDelayMs)}ms
+            {b.errorStatus && ` · ${b.errorStatus}`}
+            {b.error !== 'unknown' && ` · ${b.error}`}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (entry.kind === 'redacted_thinking') {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          padding: '1.5rem',
+        }}
+      >
+        <div
+          style={{
+            borderLeft: '3px solid #8b5cf680',
+            padding: '1rem 1.5rem',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'var(--fs-sm)',
+            color: 'var(--ink-soft)',
+            fontStyle: 'italic',
+          }}
+        >
+          🧠 thinking redacted (signed)
+        </div>
+      </div>
+    )
+  }
+
+  if (entry.kind === 'todo') {
+    const b = entry.block as Extract<Block, { kind: 'tool' }>
+    if (b.result?.kind !== 'todo') return null
+    const todos = b.result.data.newTodos
+    return (
+      <div style={{ padding: '1.5rem', overflowY: 'auto', height: '100%' }}>
+        <div style={{ maxWidth: '40rem', margin: '0 auto' }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--fs-xs)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              color: 'var(--ink-soft)',
+              marginBottom: '1rem',
+            }}
+          >
+            todos · {todos.length}
+          </div>
+          {todos.map((t) => {
+            const mark = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '►' : '·'
+            const color =
+              t.status === 'completed'
+                ? '#065f46'
+                : t.status === 'in_progress'
+                  ? 'var(--accent)'
+                  : 'var(--ink-soft)'
+            return (
+              <div
+                key={t.content}
+                style={{
+                  display: 'flex',
+                  gap: '0.6rem',
+                  padding: '0.4rem 0',
+                  borderBottom: '1px solid var(--rule)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 'var(--fs-sm)',
+                }}
+              >
+                <span style={{ color, flexShrink: 0, width: '1rem' }}>{mark}</span>
+                <span style={{ color: 'var(--ink)' }}>{t.content}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -781,9 +1071,10 @@ function TermPanel({
 }) {
   if (!entry) return null
   const b = entry.block as Extract<Block, { kind: 'tool' }>
-  const cmd = String(b.args.command ?? b.args.cmd ?? '')
-  const output = b.result?.content ?? ''
-  const bad = entry.exitCode !== undefined && entry.exitCode !== 0
+  const cmd = String(b.args.command ?? '')
+  const r = b.result?.kind === 'bash' ? b.result.data : null
+  const output = r ? [r.stdout, r.stderr].filter(Boolean).join('\n').trim() : ''
+  const bad = !!r && (r.isError || r.interrupted)
 
   return (
     <div style={{ borderTop: `1px solid ${bad ? '#a5303080' : 'var(--rule)'}`, flexShrink: 0 }}>
@@ -821,7 +1112,7 @@ function TermPanel({
           <span style={{ color: 'var(--ink-soft)', opacity: 0.4, userSelect: 'none' }}>$ </span>
           {trunc(cmd, 80)}
         </pre>
-        {entry.exitCode !== undefined && (
+        {bad && (
           <span
             style={{
               fontSize: 'var(--fs-xs)',
@@ -829,12 +1120,12 @@ function TermPanel({
               padding: '0 0.3rem',
               borderRadius: '2px',
               flexShrink: 0,
-              background: bad ? '#a53030' : 'transparent',
-              color: bad ? 'var(--paper)' : '#065f46',
-              border: `1px solid ${bad ? '#a53030' : '#86efac'}`,
+              background: '#a53030',
+              color: 'var(--paper)',
+              border: '1px solid #a53030',
             }}
           >
-            {entry.exitCode}
+            {r?.interrupted ? 'int' : 'err'}
           </span>
         )}
         <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-soft)', opacity: 0.3 }}>
@@ -898,7 +1189,8 @@ export function ReplayViewer({ content }: { content: string }) {
   const derivedFile = useMemo(() => {
     if (pinnedFile) return pinnedFile
     for (let i = safe; i >= 0; i--) {
-      if (entries[i]?.filePath) return entries[i]!.filePath!
+      const previous = entries[i]
+      if (previous?.filePath) return previous.filePath
     }
     return null
   }, [safe, pinnedFile, entries])
@@ -916,7 +1208,8 @@ export function ReplayViewer({ content }: { content: string }) {
     if (!entry || !derivedFile || !timeline) return null
     if (entry.fileChange && entry.filePath === derivedFile) return entry.fileChange
     for (let i = timeline.changes.length - 1; i >= 0; i--) {
-      const c = timeline.changes[i]!
+      const c = timeline.changes[i]
+      if (!c) continue
       if (c.path === derivedFile && c.blockIndex <= entry.idx && c.kind !== 'read') return c
     }
     return null
@@ -934,8 +1227,8 @@ export function ReplayViewer({ content }: { content: string }) {
       return (entry.block as Extract<Block, { kind: 'text' | 'thinking' }>).content
     }
     if (safe > 0) {
-      const prev = entries[safe - 1]!
-      if (prev.kind === 'thinking') {
+      const prev = entries[safe - 1]
+      if (prev?.kind === 'thinking') {
         return (prev.block as Extract<Block, { kind: 'thinking' }>).content
       }
     }
@@ -945,7 +1238,8 @@ export function ReplayViewer({ content }: { content: string }) {
 
   const lastBash = useMemo(() => {
     for (let i = safe; i >= 0; i--) {
-      if (entries[i]?.kind === 'bash') return entries[i]!
+      const previous = entries[i]
+      if (previous?.kind === 'bash') return previous
     }
     return null
   }, [entries, safe])
@@ -964,7 +1258,8 @@ export function ReplayViewer({ content }: { content: string }) {
   const goDown = useCallback(() => go(safe + 1), [go, safe])
   const goFileUp = useCallback(() => {
     for (let i = safe - 1; i >= 0; i--) {
-      if (entries[i]!.kind === 'write' || entries[i]!.kind === 'edit') {
+      const previous = entries[i]
+      if (previous?.kind === 'write' || previous?.kind === 'edit') {
         go(i)
         return
       }
@@ -972,7 +1267,8 @@ export function ReplayViewer({ content }: { content: string }) {
   }, [safe, entries, go])
   const goFileDown = useCallback(() => {
     for (let i = safe + 1; i < entries.length; i++) {
-      if (entries[i]!.kind === 'write' || entries[i]!.kind === 'edit') {
+      const next = entries[i]
+      if (next?.kind === 'write' || next?.kind === 'edit') {
         go(i)
         return
       }
@@ -1056,6 +1352,28 @@ export function ReplayViewer({ content }: { content: string }) {
         background: 'var(--paper)',
       }}
     >
+      {parsed.meta.isResumed && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.4rem 0.85rem',
+            background: '#fef3c7',
+            borderBottom: '1px solid #fbbf24',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'var(--fs-xs)',
+            color: '#92400e',
+            flexShrink: 0,
+          }}
+        >
+          <span>↻</span>
+          <span>
+            resumed session — {parsed.meta.resumedFromMessages ?? '?'} prior messages not in this
+            trace
+          </span>
+        </div>
+      )}
       {/* top bar */}
       <div
         style={{
@@ -1139,13 +1457,13 @@ export function ReplayViewer({ content }: { content: string }) {
           onSelect={(f) => setPinnedFile(f === pinnedFile ? null : f)}
         />
         <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'auto' }}>
-          {mounted ? (
-            <CenterContent change={currentChange} entry={entry!} />
+          {mounted && entry ? (
+            <CenterContent change={currentChange} entry={entry} />
           ) : (
             <div style={{ height: '100%', background: 'var(--paper-deep)' }} />
           )}
-          {showThinking && mounted && (
-            <ThinkingOverlay text={thinkingText!} onClose={() => setThinkDismissed(safe)} />
+          {showThinking && mounted && thinkingText != null && (
+            <ThinkingOverlay text={thinkingText} onClose={() => setThinkDismissed(safe)} />
           )}
         </div>
       </div>

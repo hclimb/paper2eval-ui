@@ -1,5 +1,17 @@
-export type { Block, TokenUsage, ToolResult } from './blocks'
-export { isStreamJson, MAX_PARSE_BYTES, parseAgentTrace, type ParseResult } from './parser'
+export type {
+  BashResult,
+  Block,
+  FileEditResult,
+  FileWriteResult,
+  GenericToolResult,
+  ReadResult,
+  TodoItem,
+  TodoWriteResult,
+  TokenUsage,
+  ToolResult,
+  TraceMeta,
+} from './blocks'
+export { MAX_PARSE_BYTES, type ParseResult, parseAgentTrace } from './parser'
 export {
   buildFileTimeline,
   changesAtBlock,
@@ -9,15 +21,13 @@ export {
   type FileTimeline,
 } from './timeline'
 export {
-  BASH_NAMES,
-  EDIT_NAMES,
-  FS_NAMES,
-  READ_NAMES,
-  SEARCH_NAMES,
+  BASH,
+  EDIT,
+  READ,
   stripAnsi,
-  TASK_NAMES,
+  TODO_WRITE,
+  TOOL_SEARCH,
   toolFilePath,
   toolIcon,
-  WEB_NAMES,
-  WRITE_NAMES,
+  WRITE,
 } from './tool-names'
