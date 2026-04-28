@@ -12,7 +12,7 @@ export function Panel({ title, children }: { title: string; children: ReactNode 
   return (
     <div
       className="border border-rule bg-paper-deep px-4 py-3"
-      style={{ boxShadow: `inset 0 2px 0 ${accent}` }}
+      style={{ borderTop: `2px solid ${accent}` }}
     >
       <h3 className="font-mono text-sm uppercase tracking-[0.1em] text-ink m-0 mb-3 pb-2 border-b border-rule/50 font-bold">
         {title}
@@ -26,9 +26,7 @@ export function KV({ label, value, accent }: { label: string; value: string; acc
   return (
     <div className="grid grid-cols-[11ch_1fr] gap-3 py-[0.2rem]">
       <span className="text-ink-soft">{label}</span>
-      <span
-        className={`break-all ${accent ? 'text-accent font-semibold' : 'text-ink'}`}
-      >
+      <span className={`break-all ${accent ? 'text-accent font-semibold' : 'text-ink'}`}>
         {value}
       </span>
     </div>

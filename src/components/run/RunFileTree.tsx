@@ -1,62 +1,46 @@
 import { useEffect, useMemo, useState } from 'react'
-import { TREE_THEME_COLORS } from '#/lib/tree-theme'
+import { SimpleFileTree } from '#/components/SimpleFileTree'
+import { formatBytes } from '#/lib/formatters'
 
 export function RunFileTree({ files }: { files: { key: string; size: number }[] }) {
-  const [mod, setMod] = useState<typeof import('@pierre/trees/react') | null>(null)
-  const [treeStyles, setTreeStyles] = useState<Record<string, string>>({})
-  const paths = useMemo(() => files.map((f) => f.key), [files])
+  const paths = useMemo(() => files.map((file) => file.key), [files])
+  const [activePath, setActivePath] = useState<string | null>(() => paths[0] ?? null)
 
   useEffect(() => {
-    import('@pierre/trees/react').then(setMod)
-    import('@pierre/trees').then(({ themeToTreeStyles }) => {
-      setTreeStyles(
-        themeToTreeStyles({
-          type: 'light',
-          bg: '#ede5d3',
-          fg: '#141410',
-          colors: TREE_THEME_COLORS,
-        }),
-      )
-    })
-  }, [])
+    setActivePath((current) => (current && paths.includes(current) ? current : (paths[0] ?? null)))
+  }, [paths])
 
-  if (!mod) return null
+  const activeFile = activePath ? files.find((file) => file.key === activePath) : null
 
   return (
-    <RunFileTreeInner
-      FileTree={mod.FileTree}
-      useFileTree={mod.useFileTree}
-      paths={paths}
-      treeStyles={treeStyles}
-    />
+    <div className="run-file-browser">
+      <aside className="run-file-sidebar" aria-label="Files">
+        <div className="run-file-head">
+          <span>Files</span>
+          <span>{files.length}</span>
+        </div>
+        <SimpleFileTree
+          activePath={activePath}
+          initialOpenDepth="all"
+          onSelect={setActivePath}
+          paths={paths}
+        />
+      </aside>
+      <section className="run-file-detail" aria-label="File detail">
+        {activeFile ? (
+          <>
+            <div className="run-file-path">{activeFile.key}</div>
+            <dl className="run-file-meta">
+              <div>
+                <dt>size</dt>
+                <dd>{formatBytes(activeFile.size)}</dd>
+              </div>
+            </dl>
+          </>
+        ) : (
+          <div className="run-file-empty">no files</div>
+        )}
+      </section>
+    </div>
   )
-}
-
-function RunFileTreeInner({
-  FileTree: TreeComponent,
-  useFileTree: useTreeHook,
-  paths,
-  treeStyles,
-}: {
-  FileTree: typeof import('@pierre/trees/react').FileTree
-  useFileTree: typeof import('@pierre/trees/react').useFileTree
-  paths: string[]
-  treeStyles: Record<string, string>
-}) {
-  const treeOpts = useMemo(
-    () => ({
-      paths,
-      initialExpansion: 'open' as const,
-      flattenEmptyDirectories: true,
-      search: true,
-      icons: 'standard' as const,
-    }),
-    [paths],
-  )
-
-  const { model } = useTreeHook(treeOpts)
-
-  const mergedStyle = useMemo(() => ({ height: '400px', ...treeStyles }), [treeStyles])
-
-  return <TreeComponent model={model} style={mergedStyle as React.CSSProperties} />
 }

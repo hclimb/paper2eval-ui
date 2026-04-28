@@ -9,6 +9,7 @@ import RouteErrorPanel from '#/components/RouteErrorPanel'
 import { SITE } from '#/lib/constants'
 import { fmtReward, formatBytes, formatDuration } from '#/lib/formatters'
 import { fetchRunList, type RunSummary } from '#/lib/runs.api'
+import type { Claims, TaskToml } from '#/lib/tasks'
 import {
   fetchAllTaskFiles,
   fetchTaskHeavy,
@@ -16,7 +17,6 @@ import {
   type TaskMeta,
   type TaskValidation,
 } from '#/lib/tasks.api'
-import type { Claims, TaskToml } from '#/lib/tasks'
 
 const taskRoute = getRouteApi('/tasks/$slug')
 
@@ -144,7 +144,10 @@ function TaskDetail() {
 
       {/* ── PART 3: HOW IT WAS BUILT ─────────────────────────── */}
       {(meta?.pipeline.steps.length ?? 0) > 0 && (
-        <Group label="How it was built" subtitle="paper2eval pipeline that turned the paper into this task">
+        <Group
+          label="How it was built"
+          subtitle="paper2eval pipeline that turned the paper into this task"
+        >
           <PipelineTimeline steps={meta?.pipeline.steps ?? []} />
         </Group>
       )}
@@ -191,29 +194,18 @@ function Group({
         <h2 className="font-mono text-xs uppercase tracking-[0.18em] font-bold m-0 leading-none">
           {label}
         </h2>
-        <span className="font-mono text-[10px] leading-none opacity-60">
-          //
-        </span>
-        <span className="font-mono text-[11px] lowercase leading-none opacity-80">
-          {subtitle}
-        </span>
+        <span className="font-mono text-[10px] leading-none opacity-60">{'//'}</span>
+        <span className="font-mono text-[11px] lowercase leading-none opacity-80">{subtitle}</span>
       </header>
       <div>{children}</div>
     </section>
   )
 }
 
-function TaskGoal({
-  claims,
-  agentTimeoutSec,
-}: {
-  claims: Claims
-  agentTimeoutSec: number
-}) {
+function TaskGoal({ claims, agentTimeoutSec }: { claims: Claims; agentTimeoutSec: number }) {
   const direction = claims.metric_direction === 'higher_is_better' ? '↑' : '↓'
   const verb = claims.metric_direction === 'higher_is_better' ? 'Push' : 'Drive'
-  const baseModelShort =
-    claims.base_model_hf_id.split('/').pop() ?? claims.base_model_hf_id
+  const baseModelShort = claims.base_model_hf_id.split('/').pop() ?? claims.base_model_hf_id
   const dataset = claims.allowed_datasets[0]
   const datasetShort = dataset ? (dataset.split('/').pop() ?? dataset) : null
   const moreDatasets = claims.allowed_datasets.length - 1
@@ -251,9 +243,7 @@ function TaskGoal({
               >
                 {datasetShort}
               </a>
-              {moreDatasets > 0 && (
-                <span className="text-ink-soft"> +{moreDatasets} more</span>
-              )}
+              {moreDatasets > 0 && <span className="text-ink-soft"> +{moreDatasets} more</span>}
             </>
           )}
           .
@@ -299,9 +289,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Prose({ children }: { children: ReactNode }) {
-  return (
-    <p className="font-body text-base text-ink leading-relaxed max-w-[75ch] m-0">{children}</p>
-  )
+  return <p className="font-body text-base text-ink leading-relaxed max-w-[75ch] m-0">{children}</p>
 }
 
 function ExtLink({ href, children }: { href: string; children: ReactNode }) {
@@ -444,9 +432,7 @@ function NumbersSection({
   return (
     <div className="space-y-6">
       <div className="bg-paper-deep/30 border border-rule rounded-sm px-5 pt-6 pb-3">
-        {showPaperAxis && (
-          <NumberAxis label="paper" marks={paperMarks} pct={pct} variant="muted" />
-        )}
+        {showPaperAxis && <NumberAxis label="paper" marks={paperMarks} pct={pct} variant="muted" />}
         <NumberAxis label="this task" marks={taskMarks} pct={pct} variant="primary" />
         <div className="ml-24 mr-4 flex justify-between font-mono text-[10px] tabular-nums text-ink-soft pt-1 border-t border-rule">
           {tickValues.map((t) => (
@@ -458,8 +444,8 @@ function NumbersSection({
       {rescaled && (
         <p className="font-body text-sm text-ink-soft leading-relaxed max-w-[65ch] m-0">
           Paper numbers were rescaled to fit this task's smaller compute envelope. The relative
-          headroom between baseline and best is preserved, so the agent's challenge is
-          equivalent in difficulty.
+          headroom between baseline and best is preserved, so the agent's challenge is equivalent in
+          difficulty.
         </p>
       )}
 
@@ -554,13 +540,7 @@ function NumberAxis({
   )
 }
 
-function SandboxSection({
-  toml,
-  claims,
-}: {
-  toml: TaskToml
-  claims: Claims
-}) {
+function SandboxSection({ toml, claims }: { toml: TaskToml; claims: Claims }) {
   const env = toml.environment
   const ramGb = Math.round((env.memory_mb * 1024 * 1024) / 1e9)
   const blocked = claims.block_list?.arxiv_ids ?? []
@@ -672,9 +652,7 @@ function PaperSection({
             <ExtLink href={paper.pdfUrl}>{repoShort(paper.pdfUrl)}</ExtLink>
           </Row>
         )}
-        {paper.topics.length > 0 && (
-          <Row label="topics">{paper.topics.slice(0, 5).join(', ')}</Row>
-        )}
+        {paper.topics.length > 0 && <Row label="topics">{paper.topics.slice(0, 5).join(', ')}</Row>}
       </dl>
 
       {(research.methodsCompared.length > 0 ||
@@ -728,10 +706,7 @@ function CitationBlock({
       <div className="font-mono text-xs text-ink-soft uppercase tracking-wider mb-1">{label}</div>
       <p className="font-mono text-sm text-ink m-0 mb-2">{source}</p>
       {citation && (
-        <pre
-          className="font-mono text-xs text-ink m-0 p-3 bg-paper-deep border-l-2 border-rule overflow-x-auto whitespace-pre-wrap"
-          style={{ wordBreak: 'normal' }}
-        >
+        <pre className="font-mono text-xs text-ink m-0 p-3 bg-paper-deep border-l-2 border-rule overflow-x-hidden whitespace-pre-wrap break-words">
           {citation}
         </pre>
       )}

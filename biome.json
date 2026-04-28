@@ -9,6 +9,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/.output",
       "!**/node_modules",
       "!**/routeTree.gen.ts",
       "!**/public/fonts",

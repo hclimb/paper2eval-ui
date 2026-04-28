@@ -86,14 +86,14 @@ const BASENAME_MAP: Record<string, string> = {
 function langFromFilename(name: string): string | null {
   const base = (name.split('/').pop() ?? name).toLowerCase()
   if (BASENAME_MAP[base]) return BASENAME_MAP[base]
-  const ext = base.includes('.') ? base.split('.').pop()! : ''
+  const ext = base.includes('.') ? (base.split('.').pop() ?? '') : ''
   return EXT_MAP[ext] ?? null
 }
 
 function langFromContent(text: string): string {
   const head = text.slice(0, 2048).trimStart()
   if (head.startsWith('#!')) {
-    const first = head.split('\n')[0]!
+    const first = head.split('\n', 1)[0] ?? ''
     if (/python/.test(first)) return 'python'
     if (/\b(ba)?sh\b/.test(first)) return 'bash'
     return 'bash'
@@ -171,7 +171,8 @@ function injectStyles() {
   el.id = STYLE_ID
   el.textContent = `
 .cb-root {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--paper-deep);
   border: 1px solid var(--rule);
   border-radius: 4px;
@@ -180,25 +181,35 @@ function injectStyles() {
 .cb-root pre {
   margin: 0;
   padding: 0.75rem 1rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   line-height: 1.75;
   background: transparent !important;
-  min-width: fit-content;
+  min-width: 0;
   border: 0;
   border-left: 0;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .cb-root code {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   background: transparent;
   padding: 0;
   font-size: 1em;
+  white-space: inherit !important;
+  overflow-wrap: anywhere;
 }
 .cb-root .line:empty::after {
   content: " ";
 }
-.cb-root.cb-wrap pre {
-  white-space: pre-wrap;
+.cb-root .line {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+}
+.cb-root.cb-nowrap pre {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
   word-break: break-word;
   min-width: 0;
 }
@@ -209,7 +220,7 @@ function injectStyles() {
 export function CodeBlock({
   content,
   maxHeight = 600,
-  wrap = false,
+  wrap = true,
   lang,
   filename,
   theme = 'github-light',
@@ -272,7 +283,7 @@ export function CodeBlock({
     }
   }, [content, resolvedLang, shouldHighlight, theme])
 
-  const cls = ['cb-root', wrap && 'cb-wrap'].filter(Boolean).join(' ')
+  const cls = ['cb-root', !wrap && 'cb-nowrap'].filter(Boolean).join(' ')
 
   const rendered = useMemo(() => (hast ? renderHast(hast) : null), [hast])
 

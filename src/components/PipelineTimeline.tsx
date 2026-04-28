@@ -39,13 +39,13 @@ export function PipelineTimeline({ steps }: { steps: TimelineStep[] }) {
     <div>
       {/* sticky step navigator */}
       <nav
-        className="sticky z-10 mt-2 -mx-3 px-3 py-2.5 mb-10 bg-paper border border-rule rounded-sm overflow-x-auto"
+        className="sticky z-10 mt-2 -mx-3 px-3 py-2.5 mb-10 bg-paper border border-rule rounded-sm overflow-x-hidden"
         style={{ top: '3.5rem' }}
         aria-label="Pipeline steps"
       >
-        <ol className="flex gap-1 m-0 p-0 list-none whitespace-nowrap">
+        <ol className="flex flex-wrap gap-1 m-0 p-0 list-none">
           {steps.map((s) => (
-            <li key={s.num} className="flex-shrink-0">
+            <li key={s.num}>
               <a
                 href={`#pipeline-step-${s.num}`}
                 className={`inline-flex items-baseline gap-2 px-2.5 py-1 font-mono text-xs uppercase tracking-wider rounded-sm transition-colors ${
@@ -54,9 +54,7 @@ export function PipelineTimeline({ steps }: { steps: TimelineStep[] }) {
                     : 'text-ink-soft hover:text-ink hover:bg-paper-deep/60'
                 }`}
               >
-                <span className="tabular-nums opacity-60">
-                  {String(s.num).padStart(2, '0')}
-                </span>
+                <span className="tabular-nums opacity-60">{String(s.num).padStart(2, '0')}</span>
                 <span>{s.name}</span>
                 {s.status !== 'ok' && (
                   <span
@@ -114,9 +112,7 @@ function StepCard({ step }: { step: TimelineStep }) {
 function StatusPill({ status }: { status: TimelineStep['status'] }) {
   if (status === 'ok')
     return (
-      <span
-        className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-ink-soft"
-      >
+      <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-ink-soft">
         <span
           aria-hidden="true"
           className="inline-block w-1.5 h-1.5 rounded-full"
@@ -311,20 +307,13 @@ function PregateDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'pregate' 
 
 // ─── COMPREHENSION ───────────────────────────────────────────────────
 
-function ComprehensionDive({
-  p,
-}: {
-  p: Extract<TimelineStepPayload, { kind: 'comprehension' }>
-}) {
+function ComprehensionDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'comprehension' }> }) {
   return (
     <div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
         <Stat label="primary method" value={p.primaryMethod ?? '—'} accent />
         <Stat label="framework" value={p.framework ?? '—'} />
-        <Stat
-          label="paper's compute"
-          value={p.paperCompute ?? '—'}
-        />
+        <Stat label="paper's compute" value={p.paperCompute ?? '—'} />
       </div>
 
       {p.methods.length > 0 && (
@@ -481,9 +470,7 @@ function ProblemDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'problem' 
         <div>
           <H4>Baseline · {p.baseline.metricValue ?? '?'}</H4>
           <div className="border border-rule/60 p-3 space-y-1 font-mono text-sm">
-            {p.baseline.method && (
-              <KV label="method" value={p.baseline.method} />
-            )}
+            {p.baseline.method && <KV label="method" value={p.baseline.method} />}
             {p.baseline.model && <KV label="model" value={p.baseline.model} />}
             {p.baseline.metricName && (
               <KV
@@ -499,10 +486,7 @@ function ProblemDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'problem' 
             )}
             {p.baseline.decoding && <KV label="decoding" value={p.baseline.decoding} />}
             {p.baseline.maxResponseLength != null && (
-              <KV
-                label="max tokens"
-                value={p.baseline.maxResponseLength.toLocaleString()}
-              />
+              <KV label="max tokens" value={p.baseline.maxResponseLength.toLocaleString()} />
             )}
             {p.baseline.nSamples != null && (
               <KV label="samples" value={String(p.baseline.nSamples)} />
@@ -512,9 +496,7 @@ function ProblemDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'problem' 
                 <div className="font-mono text-[10px] text-ink-soft uppercase tracking-wider mb-1">
                   system prompt
                 </div>
-                <p className="font-mono text-xs text-ink m-0 italic">
-                  "{p.baseline.systemPrompt}"
-                </p>
+                <p className="font-mono text-xs text-ink m-0 italic">"{p.baseline.systemPrompt}"</p>
               </div>
             )}
             {p.baseline.tableReference && (
@@ -544,7 +526,7 @@ function ProblemDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'problem' 
                 <summary className="text-xs text-ink-soft cursor-pointer hover:text-ink select-none uppercase tracking-wider">
                   literal cell from paper
                 </summary>
-                <pre className="text-xs text-ink m-0 mt-2 p-2 bg-paper-deep overflow-x-auto whitespace-pre-wrap font-mono">
+                <pre className="text-xs text-ink m-0 mt-2 p-2 bg-paper-deep overflow-x-hidden whitespace-pre-wrap break-words font-mono">
                   {p.paperBest.citation}
                 </pre>
               </details>
@@ -658,10 +640,8 @@ function DiscoveryDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'discove
           <H4>Diagnosis steps · {p.diagnosisSteps.length}</H4>
           <ol className="m-0 p-0 list-none space-y-2 font-body text-sm text-ink">
             {p.diagnosisSteps.map((s, i) => (
-              <li key={`${i}-${s.instruction.slice(0, 24)}`} className="flex gap-3">
-                <span className="font-mono text-xs text-ink-soft w-6 flex-shrink-0">
-                  {i + 1}.
-                </span>
+              <li key={`${s.instruction}-${s.purpose ?? ''}`} className="flex gap-3">
+                <span className="font-mono text-xs text-ink-soft w-6 flex-shrink-0">{i + 1}.</span>
                 <div>
                   <p className="m-0 leading-relaxed">{s.instruction}</p>
                   {s.purpose && <p className="m-0 mt-1 text-xs text-ink-soft">{s.purpose}</p>}
@@ -673,8 +653,8 @@ function DiscoveryDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'discove
       )}
       {p.diagnosisSteps.length === 0 && p.readingList.length === 0 && (
         <p className="font-body text-sm text-ink-soft leading-relaxed max-w-[70ch] m-0">
-          no extra diagnosis or reading required — the agent works from the task description and
-          its own knowledge.
+          no extra diagnosis or reading required — the agent works from the task description and its
+          own knowledge.
         </p>
       )}
     </div>
@@ -717,11 +697,7 @@ function ChallengeDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'challen
 
 // ─── VERIFICATION ────────────────────────────────────────────────────
 
-function VerificationDive({
-  p,
-}: {
-  p: Extract<TimelineStepPayload, { kind: 'verification' }>
-}) {
+function VerificationDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'verification' }> }) {
   return (
     <div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
@@ -878,7 +854,9 @@ function SizingDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'sizing' }>
         <Stat label="hardware" value={`${p.gpuCount}× ${p.gpuType}`} accent />
         <Stat
           label="estimated wall"
-          value={p.timing?.recommendedTimeoutHours != null ? `${p.timing.recommendedTimeoutHours}h` : '—'}
+          value={
+            p.timing?.recommendedTimeoutHours != null ? `${p.timing.recommendedTimeoutHours}h` : '—'
+          }
         />
         <Stat label="strategy" value={p.training?.loraRecommended ? 'LoRA' : 'full FT'} />
         <Stat label="training tier" value={p.training?.tier ?? '—'} />
@@ -908,9 +886,7 @@ function SizingDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'sizing' }>
                 value={`${p.training.method}${p.training.loraRecommended ? ' + LoRA' : ''}`}
               />
             )}
-            {p.training.nRuns != null && (
-              <Stat label="runs" value={String(p.training.nRuns)} />
-            )}
+            {p.training.nRuns != null && <Stat label="runs" value={String(p.training.nRuns)} />}
             {p.training.trainingStepsPerRun != null && (
               <Stat label="steps / run" value={p.training.trainingStepsPerRun.toLocaleString()} />
             )}
@@ -927,10 +903,7 @@ function SizingDive({ p }: { p: Extract<TimelineStepPayload, { kind: 'sizing' }>
               />
             )}
             {p.training.needsReferenceModel != null && (
-              <Stat
-                label="reference model"
-                value={p.training.needsReferenceModel ? 'yes' : 'no'}
-              />
+              <Stat label="reference model" value={p.training.needsReferenceModel ? 'yes' : 'no'} />
             )}
           </div>
         </div>

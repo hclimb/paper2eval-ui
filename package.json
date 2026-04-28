@@ -18,9 +18,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1036.0",
-    "@fontsource/iosevka": "^5.2.5",
     "@pierre/diffs": "^1.1.19",
-    "@pierre/trees": "^1.0.0-beta.3",
     "@shikijs/rehype": "^4.0.2",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",

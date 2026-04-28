@@ -1,12 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import RouteErrorPanel from '#/components/RouteErrorPanel'
-import SectionHead from '#/components/SectionHead'
 import { SITE } from '#/lib/constants'
 import { fetchDocContent, fetchDocList } from '#/lib/docs.api'
-import { TREE_THEME_COLORS } from '#/lib/tree-theme'
 
 const ACRONYMS = new Set(['json', 'api', 'gpu', 'cpu', 'llm', 'rlvr', 'ui'])
+const GROUP_ORDER = ['start', 'getting-started', 'architecture', 'tasks']
+
+type DocNavItem = {
+  group: string
+  path: string
+  title: string
+}
 
 function prettifySegment(seg: string): string {
   return seg
@@ -15,8 +20,61 @@ function prettifySegment(seg: string): string {
     .join(' ')
 }
 
-function prettifyPath(path: string): string {
-  return path.replace(/\.md$/, '').split('/').map(prettifySegment).join('/')
+function docTitle(path: string): string {
+  const filename = path.split('/').pop() ?? path
+  return prettifySegment(filename.replace(/\.md$/, ''))
+}
+
+function docGroup(path: string): string {
+  const first = path.split('/')[0] ?? ''
+  return path.includes('/') ? prettifySegment(first) : 'Start'
+}
+
+function docsRailGroupLabel(label: string): string {
+  if (label === 'Getting Started') return 'Setup'
+  return label
+}
+
+function sortDocPaths(paths: string[]): string[] {
+  return [...paths].sort((a, b) => {
+    const aRoot = a.includes('/') ? (a.split('/')[0] ?? '') : 'start'
+    const bRoot = b.includes('/') ? (b.split('/')[0] ?? '') : 'start'
+    const aRank = GROUP_ORDER.indexOf(aRoot)
+    const bRank = GROUP_ORDER.indexOf(bRoot)
+    const rankA = aRank === -1 ? GROUP_ORDER.length : aRank
+    const rankB = bRank === -1 ? GROUP_ORDER.length : bRank
+    if (rankA !== rankB) return rankA - rankB
+    if (a === 'overview.md') return -1
+    if (b === 'overview.md') return 1
+    return docTitle(a).localeCompare(docTitle(b))
+  })
+}
+
+function defaultDocPath(paths: string[]): string | null {
+  return paths.includes('overview.md') ? 'overview.md' : (sortDocPaths(paths)[0] ?? null)
+}
+
+function normalizeDocHref(
+  href: string,
+  activePath: string | null,
+  docPaths: Set<string>,
+): string | null {
+  const target = href.split('#')[0]?.trim() ?? ''
+  if (!target.endsWith('.md')) return null
+  if (/^[a-z]+:/i.test(target)) return null
+
+  const parts = target.startsWith('/') || !activePath ? [] : activePath.split('/').slice(0, -1)
+  for (const part of target
+    .replace(/^\/+/, '')
+    .replace(/^docs\//, '')
+    .split('/')) {
+    if (!part || part === '.') continue
+    if (part === '..') parts.pop()
+    else parts.push(part)
+  }
+
+  const normalized = parts.join('/')
+  return docPaths.has(normalized) ? normalized : null
 }
 
 export const Route = createFileRoute('/docs')({
@@ -36,189 +94,164 @@ export const Route = createFileRoute('/docs')({
 
 function DocsPage() {
   const { paths } = Route.useLoaderData()
-  const [mod, setMod] = useState<typeof import('@pierre/trees/react') | null>(null)
-  const [treeStyles, setTreeStyles] = useState<Record<string, string>>({})
-  const [activePath, setActivePath] = useState<string | null>(null)
+  const [activePath, setActivePath] = useState<string | null>(() => defaultDocPath(paths))
   const [docHtml, setDocHtml] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const { displayPaths, displayToReal } = useMemo(() => {
-    const sorted = [...paths].sort((a, b) => {
-      const aDepth = a.split('/').length
-      const bDepth = b.split('/').length
-      if (aDepth !== bDepth) return aDepth - bDepth
-      return a.localeCompare(b)
-    })
-    const map = new Map<string, string>()
-    const display = sorted.map((p) => {
-      const d = prettifyPath(p)
-      map.set(d, p)
-      return d
-    })
-    return { displayPaths: display, displayToReal: map }
-  }, [paths])
-
-  useEffect(() => {
-    import('@pierre/trees/react').then(setMod)
-    import('@pierre/trees').then(({ themeToTreeStyles }) => {
-      setTreeStyles(
-        themeToTreeStyles({
-          type: 'light',
-          bg: '#ede5d3',
-          fg: '#141410',
-          colors: TREE_THEME_COLORS,
-        }),
-      )
-    })
-  }, [])
-
-  const handleFileOpen = useCallback(
-    (displayPath: string) => {
-      const realPath = displayToReal.get(displayPath)
-      if (!realPath) return
-      setActivePath(realPath)
-      setLoading(true)
-      setDocHtml(null)
-      fetchDocContent({ data: { path: realPath } }).then((res) => {
-        setDocHtml(res.html)
-        setLoading(false)
-      })
-    },
-    [displayToReal],
-  )
-
-  useEffect(() => {
-    if (paths.length > 0 && !activePath) {
-      const overviewDisplay = displayPaths.find((p) => displayToReal.get(p) === 'overview.md')
-      if (overviewDisplay) handleFileOpen(overviewDisplay)
-      else if (displayPaths[0]) handleFileOpen(displayPaths[0])
-    }
-  }, [paths, activePath, displayPaths, displayToReal, handleFileOpen])
-
-  const prettyActive = activePath ? prettifyPath(activePath) : null
-  const fileName = prettyActive ? prettyActive.split('/').pop() : null
-  const fileDir = prettyActive?.includes('/')
-    ? prettyActive.slice(0, prettyActive.lastIndexOf('/'))
-    : null
-
-  return (
-    <main className="page-wrap" style={{ paddingBlock: 'var(--space-6)' }}>
-      <SectionHead label="/DOCS" />
-
-      <div className="docs-chrome">
-        <div className="docs-title-bar">
-          <span>DOCUMENTATION</span>
-          <span style={{ fontWeight: 400, fontSize: '10px' }}>{paths.length} pages</span>
-        </div>
-        <div className="docs-body">
-          <div className="docs-tree-pane">
-            <div className="docs-pane-header">Pages</div>
-            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-              {mod && (
-                <DocsTree
-                  FileTree={mod.FileTree}
-                  useFileTree={mod.useFileTree}
-                  useFileTreeSelection={mod.useFileTreeSelection}
-                  paths={displayPaths}
-                  treeStyles={treeStyles}
-                  onFileOpen={handleFileOpen}
-                />
-              )}
-            </div>
-          </div>
-          <div className="docs-content-pane">
-            {!activePath && !loading && (
-              <div className="docs-empty">
-                <svg
-                  width="36"
-                  height="36"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1"
-                >
-                  <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-                </svg>
-                <span className="docs-empty-title">select a page</span>
-                <span className="docs-empty-hint">
-                  choose a document from the tree to start reading
-                </span>
-              </div>
-            )}
-            {activePath && loading && (
-              <>
-                <div className="docs-breadcrumb">
-                  {fileDir && <span className="docs-breadcrumb-dir">{fileDir} / </span>}
-                  <span className="docs-breadcrumb-file">{fileName}</span>
-                </div>
-                <div className="docs-skeleton">
-                  <div className="docs-skeleton-line" style={{ width: '40%', height: '24px' }} />
-                  <div className="docs-skeleton-line" style={{ width: '90%' }} />
-                  <div className="docs-skeleton-line" style={{ width: '75%' }} />
-                  <div className="docs-skeleton-line" style={{ width: '85%' }} />
-                  <div className="docs-skeleton-line" style={{ width: '60%' }} />
-                  <div className="docs-skeleton-line" style={{ width: '95%' }} />
-                  <div className="docs-skeleton-line" style={{ width: '70%' }} />
-                </div>
-              </>
-            )}
-            {activePath && !loading && docHtml != null && (
-              <>
-                <div className="docs-breadcrumb">
-                  {fileDir && <span className="docs-breadcrumb-dir">{fileDir} / </span>}
-                  <span className="docs-breadcrumb-file">{fileName}</span>
-                </div>
-                <div className="docs-prose prose" dangerouslySetInnerHTML={{ __html: docHtml }} />
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </main>
-  )
-}
-
-function DocsTree({
-  FileTree: TreeComponent,
-  useFileTree: useTreeHook,
-  useFileTreeSelection: useSelectionHook,
-  paths,
-  treeStyles,
-  onFileOpen,
-}: {
-  FileTree: typeof import('@pierre/trees/react').FileTree
-  useFileTree: typeof import('@pierre/trees/react').useFileTree
-  useFileTreeSelection: typeof import('@pierre/trees/react').useFileTreeSelection
-  paths: string[]
-  treeStyles: Record<string, string>
-  onFileOpen: (path: string) => void
-}) {
-  const treeOpts = useMemo(
-    () => ({
-      paths,
-      initialExpansion: 2 as const,
-      flattenEmptyDirectories: true,
-      search: true,
-      icons: { set: 'none' as const },
-    }),
+  const docs = useMemo<DocNavItem[]>(
+    () =>
+      sortDocPaths(paths).map((path) => ({
+        group: docGroup(path),
+        path,
+        title: docTitle(path),
+      })),
     [paths],
   )
 
-  const { model } = useTreeHook(treeOpts)
-  const selectedPaths = useSelectionHook(model)
+  const docPaths = useMemo(() => new Set(paths), [paths])
+  const activeIndex = activePath ? docs.findIndex((d) => d.path === activePath) : -1
 
-  const lastOpenedRef = useRef<string | null>(null)
+  const groups = useMemo(() => {
+    const byGroup = new Map<string, DocNavItem[]>()
+    for (const doc of docs) {
+      const group = byGroup.get(doc.group) ?? []
+      group.push(doc)
+      byGroup.set(doc.group, group)
+    }
+    return [...byGroup.entries()].map(([label, items]) => ({ label, items }))
+  }, [docs])
+
+  const previousDoc = activeIndex > 0 ? docs[activeIndex - 1] : null
+  const nextDoc = activeIndex >= 0 && activeIndex < docs.length - 1 ? docs[activeIndex + 1] : null
+
   useEffect(() => {
-    const path = selectedPaths[0]
-    if (!path || path === lastOpenedRef.current) return
-    const isDir = paths.some((p) => p !== path && p.startsWith(`${path}/`))
-    if (isDir) return
-    lastOpenedRef.current = path
-    onFileOpen(path)
-  }, [selectedPaths, paths, onFileOpen])
+    if (activePath && docPaths.has(activePath)) return
+    setActivePath(defaultDocPath(paths))
+  }, [activePath, docPaths, paths])
 
-  const mergedStyle = useMemo(() => ({ height: '100%', ...treeStyles }), [treeStyles])
+  useEffect(() => {
+    if (!activePath) return
 
-  return <TreeComponent model={model} style={mergedStyle as React.CSSProperties} />
+    let cancelled = false
+    setLoading(true)
+    setLoadError(null)
+    setDocHtml(null)
+
+    fetchDocContent({ data: { path: activePath } })
+      .then((res) => {
+        if (!cancelled) setDocHtml(res.html)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : 'failed to load document')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activePath])
+
+  const handleDocLinkClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const anchor = target.closest('a')
+      const href = anchor?.getAttribute('href')
+      if (!href) return
+
+      const nextPath = normalizeDocHref(href, activePath, docPaths)
+      if (!nextPath) return
+
+      event.preventDefault()
+      setActivePath(nextPath)
+    },
+    [activePath, docPaths],
+  )
+
+  return (
+    <main className="page-wrap docs-page">
+      <section className="docs-stage">
+        <aside className="docs-sidebar" aria-label="Documentation files">
+          <div className="docs-sidebar-head">
+            <span className="eyebrow">/DOCS</span>
+          </div>
+          <nav className="docs-file-nav" aria-label="Documentation files">
+            {groups.map((group) => (
+              <section className="docs-nav-group" key={group.label}>
+                <div className="docs-nav-group-label">{docsRailGroupLabel(group.label)}</div>
+                <div className="docs-nav-pages">
+                  {group.items.map((doc) => (
+                    <button
+                      type="button"
+                      className="docs-file-button"
+                      data-active={doc.path === activePath}
+                      onClick={() => setActivePath(doc.path)}
+                      key={doc.path}
+                    >
+                      <span className="docs-file-title">{doc.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </nav>
+        </aside>
+
+        <article className="docs-reader">
+          {loading && (
+            <div className="docs-skeleton">
+              <div className="docs-skeleton-line" style={{ width: '40%', height: '24px' }} />
+              <div className="docs-skeleton-line" style={{ width: '90%' }} />
+              <div className="docs-skeleton-line" style={{ width: '75%' }} />
+              <div className="docs-skeleton-line" style={{ width: '85%' }} />
+              <div className="docs-skeleton-line" style={{ width: '60%' }} />
+            </div>
+          )}
+
+          {!loading && loadError && (
+            <div className="docs-error" role="alert">
+              {loadError}
+            </div>
+          )}
+
+          {!loading && !loadError && docHtml != null && (
+            <div
+              className="docs-prose prose"
+              dangerouslySetInnerHTML={{ __html: docHtml }}
+              onClick={handleDocLinkClick}
+            />
+          )}
+
+          {!loading && !loadError && docHtml != null && docs.length > 1 && (
+            <nav className="docs-reader-nav" aria-label="Documentation pagination">
+              <button
+                type="button"
+                className="docs-reader-nav-button"
+                disabled={!previousDoc}
+                onClick={() => previousDoc && setActivePath(previousDoc.path)}
+              >
+                <span className="docs-reader-nav-dir">Previous</span>
+                <span className="docs-reader-nav-title">{previousDoc?.title ?? 'Start'}</span>
+              </button>
+              <button
+                type="button"
+                className="docs-reader-nav-button"
+                disabled={!nextDoc}
+                onClick={() => nextDoc && setActivePath(nextDoc.path)}
+              >
+                <span className="docs-reader-nav-dir">Next</span>
+                <span className="docs-reader-nav-title">{nextDoc?.title ?? 'End'}</span>
+              </button>
+            </nav>
+          )}
+        </article>
+      </section>
+    </main>
+  )
 }
