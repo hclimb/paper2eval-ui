@@ -1,45 +1,50 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { join, normalize, relative } from 'node:path'
 import { createServerFn } from '@tanstack/react-start'
 import { markdownToHtml } from './markdown'
 
-const DOCS_ROOT = join(process.cwd(), 'public', 'docs')
+const DOC_MODULES = import.meta.glob<string>('../../public/docs/**/*.md', {
+  eager: true,
+  import: 'default',
+  query: '?raw',
+})
 
-async function walkDir(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true })
-  const paths: string[] = []
-  for (const entry of entries) {
-    const full = join(dir, entry.name)
-    if (entry.isDirectory()) {
-      paths.push(...(await walkDir(full)))
-    } else if (entry.name.endsWith('.md')) {
-      paths.push(relative(DOCS_ROOT, full))
-    }
+const DOCS_BY_PATH = new Map(
+  Object.entries(DOC_MODULES).map(([key, raw]) => [key.replace(/^.*\/public\/docs\//, ''), raw]),
+)
+const DOC_PATHS = [...DOCS_BY_PATH.keys()].sort()
+
+function normalizeDocPath(input: string): string {
+  if (input.startsWith('/') || input.includes('\\') || input.includes('\0')) {
+    throw new Error('invalid path')
   }
-  return paths.sort()
+
+  const parts: string[] = []
+  for (const part of input.split('/')) {
+    if (!part || part === '.') continue
+    if (part === '..') throw new Error('invalid path')
+    parts.push(part)
+  }
+
+  const normalized = parts.join('/')
+  if (!DOCS_BY_PATH.has(normalized)) {
+    throw new Error('document not found')
+  }
+
+  return normalized
 }
 
 export const fetchDocList = createServerFn({ method: 'GET' }).handler(
   async (): Promise<string[]> => {
-    return walkDir(DOCS_ROOT)
+    return DOC_PATHS
   },
 )
 
 export const fetchDocContent = createServerFn({ method: 'GET' })
   .inputValidator((d: { path: string }) => d)
   .handler(async ({ data }) => {
-    const normalized = normalize(data.path)
-    if (normalized.includes('..') || normalized.startsWith('/')) {
-      throw new Error('invalid path')
-    }
-
-    const fullPath = join(DOCS_ROOT, normalized)
-    if (!fullPath.startsWith(DOCS_ROOT)) {
-      throw new Error('invalid path')
-    }
-
-    const raw = await readFile(fullPath, 'utf-8')
+    const normalized = normalizeDocPath(data.path)
+    const raw = DOCS_BY_PATH.get(normalized)
+    if (raw == null) throw new Error('document not found')
     const html = await markdownToHtml(raw)
 
-    return { path: data.path, raw, html }
+    return { path: normalized, raw, html }
   })
